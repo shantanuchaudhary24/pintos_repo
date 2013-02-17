@@ -1,0 +1,7 @@
+
+--This line, and those below, will be ignored--
+
+M    src/utils/pintos
+M    src/utils/Makefile
+M    src/userprog/exception.c
+M    src/Makefile.userprog
