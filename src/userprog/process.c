@@ -18,6 +18,10 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "lib/string.h"
+#include "lib/stdio.h"
+
+#define MAXARGS 32
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
@@ -31,14 +35,14 @@ process_execute (const char *file_name)
 {
   char *fn_copy;
   tid_t tid;
-
+  
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page (0);
   if (fn_copy == NULL)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
-
+  
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
   if (tid == TID_ERROR)
@@ -55,24 +59,93 @@ start_process (void *file_name_)
   struct intr_frame if_;
   bool success;
 
+  /*
+  Delcaration of variables required later
+  */
+  char *token, *save_ptr;
+  void *start;
+  int argc, i;
+  int *argv_off;
+  size_t file_name_len;
+
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+  /*
+  initialize the variables argc to 0
+  */
+  argc = 0;
+  // argv_off is the pointer to an integer. Here it is being pointed to the beginning of a block of 32*integers.
+  argv_off = malloc (MAXARGS * sizeof (int));
+  // get the length of the string file_name
+  file_name_len = strlen (file_name);
+  argv_off[0] = 0;
+  //tokenize the file_name and store the offset(wrt start) of each argument in argv_off
+  for (
+       token = strtok_r (file_name, " ", &save_ptr);
+       token != NULL;
+       token = strtok_r (NULL, " ", &save_ptr)
+       )
+        {
+          while (*(save_ptr) == ' ')
+            ++save_ptr;
+          argv_off[++argc] = save_ptr - file_name;
+        }
+  
+  // load the file 
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page (file_name);
-  if (!success) 
+  
+  if (!success)
     thread_exit ();
+  else {
+      // load the file_name (all the arguments) on the stack.
+      if_.esp -= file_name_len + 1;
+      start = if_.esp;
+      memcpy (if_.esp, file_name, file_name_len + 1);
+      // align the stack in groups of 4 bytes
+      if_.esp -= 4 - (file_name_len + 1) % 4; /* alignment */
+      //add null as the last argument argv[argc]
+      if_.esp -= 4;
+      *(int *)(if_.esp) = 0;
+      // add the address of each argument in the stack on the top of stack
+      for (i = argc - 1; i >= 0; --i)
+        {
+          if_.esp -= 4;
+          *(void **)(if_.esp) = start + argv_off[i]; /* argv[x] */
+          printf("passing argument: %s\n", (start + argv_off[i]));
+        }
 
+      // add the pointer to starting pointer on the top of stack
+      if_.esp -= 4;
+      *(char **)(if_.esp) = (if_.esp + 4); /* argv */
+      if_.esp -= 4;
+      // add the number of arguments on the top of the stack (argc)
+      *(int *)(if_.esp) = argc;
+      // add a return address just to make sure that the format is alwasy same.
+      if_.esp -= 4;
+      *(int *)(if_.esp) = 0; /* Return address */
+  }
+  
+//  hex_dump(0, if_.esp, PHYS_BASE-(int)if_.esp, true);
+  
+  // free the variable argv_off
+  free(argv_off);
+  palloc_free_page (file_name);
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
      threads/intr-stubs.S).  Because intr_exit takes all of its
      arguments on the stack in the form of a `struct intr_frame',
      we just point the stack pointer (%esp) to our stack frame
      and jump to it. */
+
+  // push all the arguments on the stack in the given format and then intialize the stack pointer
+  
+  // asm volatile ("pushl %0" : :);
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
@@ -89,6 +162,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
+  while(1);
   return -1;
 }
 
