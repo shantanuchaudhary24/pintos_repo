@@ -150,8 +150,11 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
 	
   // lab 2 implementation
-  f->eip=f->eax;			// setting value of eip to value of eax
-  f->eax=0xffffffff; 		// setting value of eax to -1
+  if(f->cs == SEL_KCSEG)		// checking if we are using the kernel segment
+  {
+  	f->eip=f->eax;				// setting value of eip to value of eax
+  	f->eax=0xffffffff;			// setting value of eax to -1
+  }			
   // lab 2 implementation	
 
   /* To implement virtual memory, delete the rest of the function
