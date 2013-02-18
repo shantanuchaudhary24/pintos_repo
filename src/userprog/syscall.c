@@ -1,12 +1,11 @@
 #include "userprog/syscall.h"
 //14406
 #include <stdio.h>
-#include <syscall-nr.h>
-#include "threads/interrupt.h"
-#include "threads/thread.h"
+#include <syscall-nr.h>				// reference to library to get interrupt numbers
+#include "threads/interrupt.h"		// reference to library for intr_frame 
+#include "threads/thread.h"			
 
 static void syscall_handler (struct intr_frame *);
-
 void
 syscall_init (void) 
 {
@@ -16,7 +15,6 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f UNUSED) 
 {
-  
   printf ("system call!\n");
-  thread_exit ();
+  thread_exit (); 
 }
