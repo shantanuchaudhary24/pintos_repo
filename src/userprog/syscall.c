@@ -31,6 +31,7 @@ static unsigned tell (int fd);
 static void seek (int fd, unsigned position);
 static bool remove (const char *file);
 static void exit (int status);
+static int get_user_byte (const uint32_t *uaddr);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
 
@@ -181,21 +182,20 @@ static void seek (int fd, unsigned pos){return;}
 static bool remove (const char *file){return false;}
 
 // Lab 2 Implementation
-/* Reads 4 bytes at user virtual address UADDR.
-   UADDR must be below PHYS_BASE.
-   Returns the byte value if successful, -1 if a segfault
-   occurred. */
+/* Reads 4 BYTES at user virtual address UADDR.
+ * UADDR must be below PHYS_BASE.
+ * Returns the byte value if successful, -1 if a segfault
+ * occurred. */
 static int
-get_user_byte (const uint32_t *uaddr)						// Modified get_user to return 32-bit(4 bytes) result to the calling function 
+get_user_byte (const uint32_t *uaddr)		// Modified get_user to return 32-bit(4 bytes) result to the calling function 
 {
-  int result=get_user(uaddr);												// local variable
   // Checking validity of the passed address
-  if(result==(-1))
+  if(!is_user_vaddr(uaddr))
   {
-      return result;
+      return -1;
   }
-  /*calculating 32-bit value by using the given get_user function 
-    and shifting the obtained values by appropriate amount to get the 32-bit address.*/
+/* calculating 32-bit(4 BYTES) value by using the given get_user function 
+ * and shifting the obtained values by appropriate amount to get the 32-bit address.*/
   else
   {
 	  result=get_user(uaddr) + ( get_user(uaddr)<<8 ) + ( get_user(uaddr)<<16 ) + ( get_user(uaddr)<<24 )
@@ -214,7 +214,7 @@ get_user (const uint8_t *uaddr)
   int result;
   if(!is_user_vaddr(uaddr) || uaddr==NULL)
   {
-        result=-1;
+		result=-1;
   }
   asm ("movl $1f, %0; movzbl %1, %0; 1:"
        : "=&a" (result) : "m" (*uaddr));
@@ -224,16 +224,16 @@ get_user (const uint8_t *uaddr)
 /* Writes BYTE to user address UDST.
    UDST must be below PHYS_BASE.
    Returns true if successful, false if a segfault occurred. */
-static bool
+static uint8_t
 put_user (uint8_t *udst, uint8_t byte)
 {
   int error_code;
   if(!is_user_vaddr(udst) || udst==NULL)
   {
-        error_code=-1;
+        error_code=(-1);
   }
   asm ("movl $1f, %0; movb %b2, %1; 1:"
        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-  return error_code != -1;
+  return byte;
 }
 // Lab 2 Implementation end
