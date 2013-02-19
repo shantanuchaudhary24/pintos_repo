@@ -28,8 +28,8 @@ struct fd_elem {
 static struct list file_list; 
 
 static void syscall_handler (struct intr_frame *);
-//static int write (int fd, const void *buffer, unsigned size);
-//static void halt (void);
+static int write (int fd, const void *buffer, unsigned size);
+static void halt (void);
 static bool create (const char *file, unsigned initial_size);
 static int open (const char *file);
 static void close (int fd);
@@ -56,42 +56,6 @@ void syscall_init (void) {
   list_init(&file_list);
 }
 
-
-void halt (void){
-	power_off();
-}
-
-int write (int fd, const void *buffer, unsigned size){
-//	printf("%s", (char*)buffer);
-	struct file *File;
-	int ret = -1;
-//	unsigned i = 0;
-	if(fd == STDOUT_FILENO){
-//		char * s = (char *)buffer;
-		printf("yippee 1\n");
-//		for(i = 0; i < size; i++)
-//			putchar ((int)*(s+i));
-		putbuf(buffer, size);
-	}
-	else if (fd == STDIN_FILENO){
-		printf("yippee 2\n");
-		exit(-1);
-	}
-	else if(!is_user_vaddr (buffer) || !is_user_vaddr (buffer + size)){
-		exit(-1);
-	}
-	else{
-		File = find_file_by_fd(fd);
-		if(!File){
-			printf("yippee 3\n");
-			return -1;
-		}
-		
-		ret = file_write(File, buffer, size);
-	}
-//	printf("check \n");
-	return ret;	
-}
 
 static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 	
@@ -305,6 +269,41 @@ static void seek (int fd, unsigned position){
 	return;
 }
 
+static void halt (void){
+	power_off();
+}
+
+static int write (int fd, const void *buffer, unsigned size){
+//	printf("%s", (char*)buffer);
+	struct file *File;
+	int ret = -1;
+//	unsigned i = 0;
+	if(fd == STDOUT_FILENO){
+//		char * s = (char *)buffer;
+		printf("yippee 1\n");
+//		for(i = 0; i < size; i++)
+//			putchar ((int)*(s+i));
+		putbuf(buffer, size);
+	}
+	else if (fd == STDIN_FILENO){
+		printf("yippee 2\n");
+		exit(-1);
+	}
+	else if(!is_user_vaddr (buffer) || !is_user_vaddr (buffer + size)){
+		exit(-1);
+	}
+	else{
+		File = find_file_by_fd(fd);
+		if(!File){
+			printf("yippee 3\n");
+			return -1;
+		}
+		
+		ret = file_write(File, buffer, size);
+	}
+//	printf("check \n");
+	return ret;	
+}
 
 static bool create (const char *file, unsigned initial_size){
 	if (!file)
@@ -375,6 +374,7 @@ static struct fd_elem *find_fd_elem_by_fd_in_process (int fd) {
  * UADDR must be below PHYS_BASE.
  * Returns the byte value if successful, -1 if a segfault
  * occurred. */
+ 
 static int
 get_user_byte (const uint32_t *uaddr)		// Modified get_user to return 32-bit(4 bytes) result to the calling function 
 {
@@ -384,11 +384,13 @@ get_user_byte (const uint32_t *uaddr)		// Modified get_user to return 32-bit(4 b
   {
       return -1;
   }
+  
 /* calculating 32-bit(4 BYTES) value by using the given get_user function 
  * and shifting the obtained values by appropriate amount to get the 32-bit address.*/
+ 
   else
   {
-	  result=get_user(uaddr) + ( get_user(uaddr)<<8 ) + ( get_user(uaddr)<<16 ) + ( get_user(uaddr)<<24 );
+	  result=get_user((const uint8_t *)uaddr) + ( get_user((const uint8_t *)uaddr)<<8 ) + ( get_user((const uint8_t *)uaddr)<<16 ) + ( get_user((const uint8_t *)uaddr)<<24 );
 	  return result;		
   }   
 }
@@ -398,6 +400,7 @@ get_user_byte (const uint32_t *uaddr)		// Modified get_user to return 32-bit(4 b
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
    occurred. */
+   
 static int
 get_user (const uint8_t *uaddr)
 {
@@ -426,4 +429,5 @@ put_user (uint8_t *udst, uint8_t byte)
        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
   return error_code!=(-1);
 }
+
 // Lab 2 Implementation end
