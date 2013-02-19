@@ -188,18 +188,19 @@ static bool remove (const char *file){return false;}
 static int
 get_user_byte (const uint32_t *uaddr)						// Modified get_user to return 32-bit(4 bytes) result to the calling function 
 {
-  int result;												// local variable
+  int result=get_user(uaddr);												// local variable
+  // Checking validity of the passed address
+  if(result==(-1))
+  {
+      return result;
+  }
   /*calculating 32-bit value by using the given get_user function 
     and shifting the obtained values by appropriate amount to get the 32-bit address.*/
-  if(!is_user_vaddr(uaddr) || uaddr==NULL)
-  {
-        result=-1;
-  }
   else
   {
 	  result=get_user(uaddr) + ( get_user(uaddr)<<8 ) + ( get_user(uaddr)<<16 ) + ( get_user(uaddr)<<24 )
-  }
-  return result;		 
+	  return result;		
+  }   
 }
  
 // Lab 2 Implementation
