@@ -171,7 +171,6 @@ static int write (int fd, const void *buffer, unsigned length){
 	return -1;
 }
 
-
 static int open (const char *file){return -1;}
 static void close (int fd){return;}
 static int read (int fd, void *buffer, unsigned size){return -1;}
@@ -181,6 +180,28 @@ static unsigned tell (int fd){return -1;}
 static void seek (int fd, unsigned pos){return;}
 static bool remove (const char *file){return false;}
 
+// Lab 2 Implementation
+/* Reads 4 bytes at user virtual address UADDR.
+   UADDR must be below PHYS_BASE.
+   Returns the byte value if successful, -1 if a segfault
+   occurred. */
+static int
+get_user_byte (const uint32_t *uaddr)						// Modified get_user to return 32-bit(4 bytes) result to the calling function 
+{
+  int result;												// local variable
+  /*calculating 32-bit value by using the given get_user function 
+    and shifting the obtained values by appropriate amount to get the 32-bit address.*/
+  if(!is_user_vaddr(uaddr) || uaddr==NULL)
+  {
+        result=-1;
+  }
+  else
+  {
+	  result=get_user(uaddr) + ( get_user(uaddr)<<8 ) + ( get_user(uaddr)<<16 ) + ( get_user(uaddr)<<24 )
+  }
+  return result;		 
+}
+ 
 // Lab 2 Implementation
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
