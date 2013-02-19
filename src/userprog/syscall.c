@@ -15,11 +15,21 @@
 #include "threads/malloc.h"
 #include "devices/input.h"
 #include "threads/synch.h"
+//#include "lib/kernel/console.c"
 
+
+struct fd_elem {
+	int fd;
+	struct file *File;
+	struct list_elem elem;
+//	struct list_elem thread_elem;
+};
+
+static struct list file_list; 
 
 static void syscall_handler (struct intr_frame *);
-static int write (int fd, const void *buffer, unsigned size);
-static void halt (void);
+//static int write (int fd, const void *buffer, unsigned size);
+//static void halt (void);
 static bool create (const char *file, unsigned initial_size);
 static int open (const char *file);
 static void close (int fd);
@@ -35,14 +45,57 @@ static int get_user_byte (const uint32_t *uaddr);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
 
-void syscall_init (void) 
-{
+
+static struct file *find_file_by_fd (int fd);
+static struct fd_elem *find_fd_elem_by_fd (int fd);
+static int alloc_fid (void);
+static struct fd_elem *find_fd_elem_by_fd_in_process (int fd);
+
+
+void syscall_init (void) {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
+  list_init(&file_list);
 }
 
-// lab2 implementation syscall handler	
-static void syscall_handler (struct intr_frame *f /*UNUSED*/) 
-{
+
+void halt (void){
+	power_off();
+}
+
+int write (int fd, const void *buffer, unsigned size){
+//	printf("%s", (char*)buffer);
+	struct file *File;
+	int ret = -1;
+//	unsigned i = 0;
+	if(fd == STDOUT_FILENO){
+//		char * s = (char *)buffer;
+		printf("yippee 1\n");
+//		for(i = 0; i < size; i++)
+//			putchar ((int)*(s+i));
+		putbuf(buffer, size);
+	}
+	else if (fd == STDIN_FILENO){
+		printf("yippee 2\n");
+		exit(-1);
+	}
+	else if(!is_user_vaddr (buffer) || !is_user_vaddr (buffer + size)){
+		exit(-1);
+	}
+	else{
+		File = find_file_by_fd(fd);
+		if(!File){
+			printf("yippee 3\n");
+			return -1;
+		}
+		
+		ret = file_write(File, buffer, size);
+	}
+//	printf("check \n");
+	return ret;	
+}
+
+static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
+	
 	/*printf ("system call!\n");
 	thread_exit ();*/
 	
@@ -139,18 +192,121 @@ return;
 // Exit System Call 
 void exit(int status){
 	struct thread *t;
-	t = thread_current ();				// gets the current thread  
-	t->status = status;					// sets the status of the thread in the status field
-	thread_exit ();						// terminates the thread
+	t = thread_current ();   
+	t->status = status;
+	thread_exit ();
 	return;
 }
 
-// Halt system call
-static void halt (void){
-	power_off();
+static int read (int fd, void *buffer, unsigned size){	
+	struct file *File;
+	int ret = -1;
+	unsigned i;
+
+	if(fd == 0){
+		for (i = 0; i < size; i++)
+			*(uint8_t *)(buffer + i) = input_getc ();
+		ret = size;
+	}
+	else if (fd == 1){
+		exit(-1);
+	}
+	else if(!is_user_vaddr (buffer) || !is_user_vaddr (buffer + size)){
+		exit(-1);
+	}
+	else{
+		File = find_file_by_fd(fd);
+		if(!File)
+			return -1;
+		
+		ret = file_read(File, buffer, size);
+	}
+	return ret;	
 }
 
-// Create system call
+static int open (const char *File){
+	struct file *F;
+	struct fd_elem *FDE;
+	int ret = -1;
+	
+	if (!File)
+		return ret;
+	if (!is_user_vaddr (File))
+		exit (-1);
+	
+	F = filesys_open (File);
+	if (!F)
+		return ret;
+
+	FDE = (struct fd_elem *)malloc(sizeof(struct fd_elem));
+	if (!FDE){
+	  file_close (F);
+	  return ret;
+	}
+
+	FDE->File = F;
+	FDE->fd = alloc_fid ();
+	list_push_back (&file_list, &FDE->elem);
+//	list_push_back (&thread_current ()->files, &FDE->thread_elem);
+	ret = FDE->fd;
+	return ret;
+}
+
+static void close (int fd){
+	struct fd_elem *f;
+
+//	f = find_fd_elem_by_fd_in_process (fd);
+	f = find_fd_elem_by_fd (fd);
+
+	if (!f)
+		return;
+	
+	file_close (f->File);
+	list_remove (&f->elem);
+//	list_remove (&f->thread_elem);
+	free (f);
+}
+
+static pid_t exec (const char *cmd_line){
+	if (!cmd_line)
+		return -1;
+	
+	if(!is_user_vaddr (cmd_line))
+		exit(-1);
+		
+	return process_execute (cmd_line);
+}
+
+static int wait (pid_t pid){
+	return process_wait(pid);
+}
+
+static int filesize (int fd){
+	struct file *File;
+	File = find_file_by_fd (fd);
+	if (!File)
+		return -1;
+	return file_length(File);
+}
+
+static unsigned tell (int fd){
+	struct file *File;
+	File = find_file_by_fd (fd);
+	if (!File)
+		return -1;
+	return file_tell (File);
+}
+
+static void seek (int fd, unsigned position){
+	struct file *File;
+	File = find_file_by_fd (fd);
+	if (!File)
+		return;
+	file_seek (File, position);
+	return;
+}
+
+
 static bool create (const char *file, unsigned initial_size){
 	if (!file)
 		return false;
@@ -158,82 +314,59 @@ static bool create (const char *file, unsigned initial_size){
 		return filesys_create (file, initial_size);
 }
 
-// exec system call
-static pid_t exec (const char *cmd_line){
-	if (!cmd_line || !is_user_vaddr (cmd_line)) /* bad ptr */
-		return -1;
-	else	
-		return process_execute (cmd_line);
+static bool remove (const char *file){
+	if(!file)
+		return false;
+	
+	if(!is_user_vaddr(file))
+		exit(-1);
+	
+	return filesys_remove(file);
+}
+	
+static int alloc_fid(void){
+	int fid = 2;
+	while(find_fd_elem_by_fd(fid)!=NULL){
+		fid++;
+	}
+	return fid;
 }
 
-
-static int write (int fd, const void *buffer, unsigned length){
-	printf("check\n");
-	return -1;
+static struct file * find_file_by_fd (int fd) {
+  struct fd_elem *ret;
+  ret = find_fd_elem_by_fd (fd);
+  if (!ret)
+    return NULL;
+  return ret->File;
 }
 
-static int open (const char *file){return -1;}
-static void close (int fd){return;}
-static int read (int fd, void *buffer, unsigned size){return -1;}
-static int wait (pid_t pid){return -1;}
-static int filesize (int fd){return -1;}
-static unsigned tell (int fd){return -1;}
-static void seek (int fd, unsigned pos){return;}
-static bool remove (const char *file){return false;}
+static struct fd_elem *find_fd_elem_by_fd (int fd) {
+	struct fd_elem *ret;
+	struct list_elem *l;
 
-// Lab 2 Implementation
-/* Reads 4 BYTES at user virtual address UADDR.
- * UADDR must be below PHYS_BASE.
- * Returns the byte value if successful, -1 if a segfault
- * occurred. */
-static int
-get_user_byte (const uint32_t *uaddr)		// Modified get_user to return 32-bit(4 bytes) result to the calling function 
-{
-  // Checking validity of the passed address
-  if(!is_user_vaddr(uaddr))
-  {
-      return -1;
-  }
-/* calculating 32-bit(4 BYTES) value by using the given get_user function 
- * and shifting the obtained values by appropriate amount to get the 32-bit address.*/
-  else
-  {
-	  result=get_user(uaddr) + ( get_user(uaddr)<<8 ) + ( get_user(uaddr)<<16 ) + ( get_user(uaddr)<<24 )
-	  return result;		
-  }   
+	for (l = list_begin (&file_list); l != list_end (&file_list); l = list_next (l)){
+		ret = list_entry (l, struct fd_elem, elem);
+		if (ret->fd == fd)
+			return ret;
+	}
+
+	return NULL;
 }
- 
-// Lab 2 Implementation
-/* Reads a byte at user virtual address UADDR.
-   UADDR must be below PHYS_BASE.
-   Returns the byte value if successful, -1 if a segfault
-   occurred. */
-static int
-get_user (const uint8_t *uaddr)
-{
-  int result;
-  if(!is_user_vaddr(uaddr) || uaddr==NULL)
-  {
-		result=-1;
-  }
-  asm ("movl $1f, %0; movzbl %1, %0; 1:"
-       : "=&a" (result) : "m" (*uaddr));
-  return result;
+
+/*
+static struct fd_elem *find_fd_elem_by_fd_in_process (int fd) {
+	struct fd_elem *ret;
+	struct list_elem *l;
+	struct thread *t;
+
+	t = thread_current ();
+
+	for (l = list_begin (&t->files); l != list_end (&t->files); l = list_next (l)) {
+		ret = list_entry (l, struct fd_elem, thread_elem);
+		if (ret->fd == fd)
+			return ret;
+	}
+
+	return NULL;
 }
- 
-/* Writes BYTE to user address UDST.
-   UDST must be below PHYS_BASE.
-   Returns true if successful, false if a segfault occurred. */
-static uint8_t
-put_user (uint8_t *udst, uint8_t byte)
-{
-  int error_code;
-  if(!is_user_vaddr(udst) || udst==NULL)
-  {
-        error_code=(-1);
-  }
-  asm ("movl $1f, %0; movb %b2, %1; 1:"
-       : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-  return byte;
-}
-// Lab 2 Implementation end
+*/	

@@ -131,7 +131,7 @@ start_process (void *file_name_)
       *(int *)(if_.esp) = 0; /* Return address */
   }
   
-//  hex_dump(0, if_.esp, PHYS_BASE-(int)if_.esp, true);
+  hex_dump(0, if_.esp, PHYS_BASE-(int)if_.esp, true);
   
   // free the variable argv_off
   free(argv_off);
