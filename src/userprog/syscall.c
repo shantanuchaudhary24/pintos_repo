@@ -31,18 +31,20 @@ static unsigned tell (int fd);
 static void seek (int fd, unsigned position);
 static bool remove (const char *file);
 static void exit (int status);
-
-
+static int get_user (const uint8_t *uaddr);
+static bool put_user (uint8_t *udst, uint8_t byte);
 
 void syscall_init (void) 
 {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
+// lab2 implementation syscall handler	
 static void syscall_handler (struct intr_frame *f /*UNUSED*/) 
 {
-/*  printf ("system call!\n");
+	/*printf ("system call!\n");
 	thread_exit ();*/
+	
 	int *p;
 	unsigned ret = 0;
   
@@ -130,24 +132,24 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 	}
 return;
 }
-
+// lab2 implementation syscall_handler end
+	
+// lab2 implementation  Various System Call Functions defined below
+// Exit System Call 
 void exit(int status){
 	struct thread *t;
-	t = thread_current ();  
-	t->status = status;
-	thread_exit ();
+	t = thread_current ();				// gets the current thread  
+	t->status = status;					// sets the status of the thread in the status field
+	thread_exit ();						// terminates the thread
 	return;
 }
 
-static int write (int fd, const void *buffer, unsigned length){
-	printf("check\n");
-	return -1;
-}
-
+// Halt system call
 static void halt (void){
 	power_off();
 }
 
+// Create system call
 static bool create (const char *file, unsigned initial_size){
 	if (!file)
 		return false;
@@ -155,10 +157,7 @@ static bool create (const char *file, unsigned initial_size){
 		return filesys_create (file, initial_size);
 }
 
-static int open (const char *file){return -1;}
-static void close (int fd){return;}
-static int read (int fd, void *buffer, unsigned size){return -1;}
-
+// exec system call
 static pid_t exec (const char *cmd_line){
 	if (!cmd_line || !is_user_vaddr (cmd_line)) /* bad ptr */
 		return -1;
@@ -166,9 +165,53 @@ static pid_t exec (const char *cmd_line){
 		return process_execute (cmd_line);
 }
 
+
+static int write (int fd, const void *buffer, unsigned length){
+	printf("check\n");
+	return -1;
+}
+
+
+static int open (const char *file){return -1;}
+static void close (int fd){return;}
+static int read (int fd, void *buffer, unsigned size){return -1;}
 static int wait (pid_t pid){return -1;}
 static int filesize (int fd){return -1;}
 static unsigned tell (int fd){return -1;}
 static void seek (int fd, unsigned pos){return;}
 static bool remove (const char *file){return false;}
 
+// Lab 2 Implementation
+/* Reads a byte at user virtual address UADDR.
+   UADDR must be below PHYS_BASE.
+   Returns the byte value if successful, -1 if a segfault
+   occurred. */
+static int
+get_user (const uint8_t *uaddr)
+{
+  int result;
+  if(!is_user_vaddr(uaddr) || uaddr==NULL)
+  {
+        result=-1;
+  }
+  asm ("movl $1f, %0; movzbl %1, %0; 1:"
+       : "=&a" (result) : "m" (*uaddr));
+  return result;
+}
+ 
+/* Writes BYTE to user address UDST.
+   UDST must be below PHYS_BASE.
+   Returns true if successful, false if a segfault occurred. */
+static bool
+put_user (uint8_t *udst, uint8_t byte)
+{
+  int error_code;
+  if(!is_user_vaddr(udst) || udst==NULL)
+  {
+        error_code=-1;
+  }
+  asm ("movl $1f, %0; movb %b2, %1; 1:"
+       : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+  return error_code != -1;
+}
+// Lab 2 Implementation end
