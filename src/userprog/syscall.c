@@ -45,7 +45,6 @@ static int get_user_byte (const uint32_t *uaddr);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
 
-
 static struct file *find_file_by_fd (int fd);
 static struct fd_elem *find_fd_elem_by_fd (int fd);
 static int alloc_fid (void);
@@ -379,6 +378,7 @@ static struct fd_elem *find_fd_elem_by_fd_in_process (int fd) {
 static int
 get_user_byte (const uint32_t *uaddr)		// Modified get_user to return 32-bit(4 bytes) result to the calling function 
 {
+  int result;
   // Checking validity of the passed address
   if(!is_user_vaddr(uaddr))
   {
@@ -388,7 +388,7 @@ get_user_byte (const uint32_t *uaddr)		// Modified get_user to return 32-bit(4 b
  * and shifting the obtained values by appropriate amount to get the 32-bit address.*/
   else
   {
-	  result=get_user(uaddr) + ( get_user(uaddr)<<8 ) + ( get_user(uaddr)<<16 ) + ( get_user(uaddr)<<24 )
+	  result=get_user(uaddr) + ( get_user(uaddr)<<8 ) + ( get_user(uaddr)<<16 ) + ( get_user(uaddr)<<24 );
 	  return result;		
   }   
 }
@@ -414,16 +414,16 @@ get_user (const uint8_t *uaddr)
 /* Writes BYTE to user address UDST.
    UDST must be below PHYS_BASE.
    Returns true if successful, false if a segfault occurred. */
-static uint8_t
+static bool
 put_user (uint8_t *udst, uint8_t byte)
 {
   int error_code;
   if(!is_user_vaddr(udst) || udst==NULL)
   {
-        error_code=(-1);
+        return false;
   }
   asm ("movl $1f, %0; movb %b2, %1; 1:"
        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-  return byte;
+  return error_code!=(-1);
 }
 // Lab 2 Implementation end
