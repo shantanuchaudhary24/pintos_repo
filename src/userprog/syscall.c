@@ -41,14 +41,14 @@ static unsigned tell (int fd);
 static void seek (int fd, unsigned position);
 static bool remove (const char *file);
 static void exit (int status);
-static int get_user_byte (const uint32_t *uaddr);
+static int get_user_byte(const uint8_t *uaddr);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
 
 static struct file *find_file_by_fd (int fd);
 static struct fd_elem *find_fd_elem_by_fd (int fd);
 static int alloc_fid (void);
-static struct fd_elem *find_fd_elem_by_fd_in_process (int fd);
+//static struct fd_elem *find_fd_elem_by_fd_in_process (int fd);
 
 
 void syscall_init (void) {
@@ -373,11 +373,11 @@ static struct fd_elem *find_fd_elem_by_fd_in_process (int fd) {
  * occurred. */
  
 static int
-get_user_byte (const uint32_t *uaddr)		// Modified get_user to return 32-bit(4 bytes) result to the calling function 
+get_user_byte (const uint8_t *uaddr)		// Modified get_user to return 32-bit(4 bytes) result to the calling function 
 {
   int result;
   // Checking validity of the passed address
-  if(!is_user_vaddr(uaddr) || uaddr==0 || uaddr==NULL || pagedir_get_page(current_thread()->pagedir,uaddr)==NULL)
+  if(!is_user_vaddr(uaddr) || uaddr==0 || uaddr==NULL )
   {
       return -1;
   }
@@ -385,9 +385,9 @@ get_user_byte (const uint32_t *uaddr)		// Modified get_user to return 32-bit(4 b
  * and shifting the obtained values by appropriate amount to get the 32-bit address.*/
   else
   {
-	  result=get_user((const uint8_t *)uaddr) + ( get_user((const uint8_t *)uaddr)<<8 ) + ( get_user((const uint8_t *)uaddr)<<16 ) + (get_user((const uint8_t *)uaddr)<<24 );
+	  result=get_user(uaddr)+(get_user(uaddr)<<8)+(get_user(uaddr)<<16)+(get_user(uaddr)<<24);
 	  return result;		
-  }   
+  }
 }
  
 // Lab 2 Implementation
@@ -399,7 +399,7 @@ static int
 get_user (const uint8_t *uaddr)
 {
   int result;
-  asm ("movl $1f, %0; movzbl %1, %0; 1:"
+  asm ("movl $1f, %0; movzbl %1, %0; 1:"						// movzbl has a size of 3 bytes. This point is important for fage_fault.
        : "=&a" (result) : "m" (*uaddr));
   return result;
 }

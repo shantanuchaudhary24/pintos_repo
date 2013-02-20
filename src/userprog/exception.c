@@ -97,9 +97,16 @@ kill (struct intr_frame *f)
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
-      intr_dump_frame (f);
-      PANIC ("Kernel bug - unexpected interrupt in kernel"); 
-
+      if(f->eip==((char *)f->eax-3))	  // eip contains the value of address of the fault, eax contains the address we need to jump to.
+      {
+        f->eip=(void *)f->eax;				// setting value of eip to value of eax
+        f->eax=(-1);			            // setting value of eax to -1
+      }			
+      else
+      {
+        intr_dump_frame (f);
+        PANIC ("Kernel bug - unexpected interrupt in kernel"); 
+      }
     default:
       /* Some other code segment?  Shouldn't happen.  Panic the
          kernel. */
@@ -149,14 +156,18 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 	
-  // lab 2 implementation
-  if(f->cs == SEL_KCSEG)		// checking if we are using the kernel segment
-  {
-  	f->eip=f->eax;				// setting value of eip to value of eax
-  	f->eax=0xffffffff;			// setting value of eax to -1
-  }			
-  // lab 2 implementation	
-
+/* //lab 2 implementation 
+  if(!not_present)
+  goto PAGE_FAULT
+ //lab 2 implementation
+PAGE_FAULT: 
+     // lab 2 implementation
+    if(!user)		        
+    {
+      f->eip=(void *)f->eax;				// setting value of eip to value of eax
+      f->eax=(-1);			            // setting value of eax to -1
+    }			
+  // lab 2 implementation */	
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
