@@ -63,7 +63,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 	thread_exit ();*/
 	int *p;
 	unsigned ret = 0;
-   unsigned arg1=0,arg2=0,arg3=0;
+   int arg1=0,arg2=0,arg3=0;
 	p = f->esp;
   
 	if (!is_user_vaddr (p))
@@ -77,55 +77,67 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			halt();					  
 			break;
 		case SYS_CLOSE : 
-			if (!(is_user_vaddr (p + 1)))
+			arg1=get_user_byte((p + 1));
+			if (arg1==(-1))
 				exit(-1);						  
-			close(*(p + 1)); 
+			close(arg1); 
 			break;
 		case SYS_CREATE : 
-			if (!(is_user_vaddr (p + 1) && is_user_vaddr (p + 2)))
+			arg1=get_user_byte(p+1);
+			arg2=get_user_byte(p+2);
+			if (arg1==(-1) || arg2==(-1))
 				exit(-1);						  
-			ret = (unsigned)create((char*)(p + 1), *(p + 2));
+			ret = (unsigned)create((const char*)arg1, (unsigned)arg2);
 			f->eax = ret; 
 			break;
 		case SYS_EXEC : 
-			if (!(is_user_vaddr (p + 1)))
+			arg1=get_user_byte(p+1);
+			if (arg1==(-1))
 				exit(-1);						  
-			ret = (unsigned)exec((char*)(p + 1));
+			ret = (unsigned)exec((const char*)arg1);
 			f->eax = ret; 
 			break;
 		case SYS_EXIT : 
-			if (!(is_user_vaddr (p + 1)))
+			arg1=get_user_byte(p+1);
+			if (arg1==(-1))
 				exit(-1);						  
-			exit(*(p + 1));
+			exit(arg1);
 			break;
 		case SYS_FILESIZE : 
-			if (!(is_user_vaddr (p + 1)))
+			arg1=get_user_byte(p+1);
+			if (arg1==(-1))
 				exit(-1);						  
-			ret = (unsigned)filesize(*(p + 1));
+			ret = (unsigned)filesize(arg1);
 			f->eax = ret; 
 			break;
 		case SYS_OPEN : 
-			if (!(is_user_vaddr (p + 1)))
+			arg1=get_user_byte(p+1);
+			if (arg1==(-1))
 				exit(-1);						  
-			ret = (unsigned)open((char*)(p + 1));
+			ret = (unsigned)open((const char*)(arg1));
 			f->eax = ret; 
 			break;
 		case SYS_WAIT :
-			if (!(is_user_vaddr (p + 1)))
+			arg1=get_user_byte(p+1);
+			if (arg1==(-1))
 				exit(-1);						  
-			ret = (unsigned)wait(*(p + 1));
+			ret = (unsigned)wait((pid_t)arg1);
 			f->eax = ret; 
 			break;
 		case SYS_REMOVE : 
-			if (!(is_user_vaddr (p + 1)))
+			arg1=get_user_byte(p+1);
+			if (arg1==(-1))
 				exit(-1);						  
-			ret = (unsigned)remove((char*)(p + 1));
+			ret = (unsigned)remove((const char*)arg1);
 			f->eax = ret; 
 			break;
 		case SYS_READ :
-			if (!(is_user_vaddr (p + 1) && is_user_vaddr (p + 2) && is_user_vaddr (p + 3)))
+			arg1=get_user_byte(p+1);
+			arg2=get_user_byte(p+2);
+			arg3=get_user_byte(p+3);
+			if (arg1==(-1) || arg2==(-1) || arg3==(-1))
 				exit(-1);						  
-			ret = (unsigned)read(*(p + 1), (void*)(p + 2), *(p + 3));
+			ret = (unsigned)read(arg1, (void*)arg2, (unsigned)arg3);
 			f->eax = ret; 
 			break;
 		case SYS_WRITE : 
@@ -134,18 +146,21 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			arg3=get_user_byte(p+3);
 			if (arg1==(-1) || arg2==(-1) || arg3==(-1))
 				exit(-1);						  
-			ret = (unsigned)write((int)arg1, (const void *)arg2, arg3);
+			ret = (unsigned)write(arg1, (const void *)arg2, (unsigned)arg3);
 			f->eax = ret; 
 			break;
 		case SYS_SEEK :  
-			if (!(is_user_vaddr (p + 1) && is_user_vaddr (p + 2)))
+			arg1=get_user_byte(p+1);
+			arg2=get_user_byte(p+2);
+			if (arg1==(-1) || arg2==(-1))
 				exit(-1);						  
-			seek(*(p + 1), *(p + 2));
+			seek(arg1, (unsigned)arg2);
 			break; 
 		case SYS_TELL :  
-			if (!(is_user_vaddr (p + 1)))
+			arg1=get_user_byte(p+1);
+			if (arg1==(-1))
 				exit(-1);						  
-			ret = (unsigned)tell(*(p + 1));
+			ret = (unsigned)tell(arg1);
 			f->eax = ret; 
 			break;
 	}
