@@ -41,7 +41,7 @@ static unsigned tell (int fd);
 static void seek (int fd, unsigned position);
 static bool remove (const char *file);
 static void exit (int status);
-static int get_user_byte(const uint8_t *uaddr);
+static int get_user_byte(int *uaddr);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
 
@@ -61,10 +61,9 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 	
 	/*printf ("system call!\n");
 	thread_exit ();*/
-	
 	int *p;
 	unsigned ret = 0;
-  
+   unsigned arg1=0,arg2=0,arg3=0;
 	p = f->esp;
   
 	if (!is_user_vaddr (p))
@@ -130,9 +129,12 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			f->eax = ret; 
 			break;
 		case SYS_WRITE : 
-			if (!(is_user_vaddr (p + 1) && is_user_vaddr (p + 2) && is_user_vaddr (p + 3)))
+			arg1=get_user_byte(p+1);
+			arg2=get_user_byte(p+2);
+			arg3=get_user_byte(p+3);
+			if (arg1==(-1) || arg2==(-1) || arg3==(-1))
 				exit(-1);						  
-			ret = (unsigned)write(*(p + 1), *(p + 2), *(p + 3));
+			ret = (unsigned)write((int)arg1, (const void *)arg2, arg3);
 			f->eax = ret; 
 			break;
 		case SYS_SEEK :  
@@ -373,9 +375,10 @@ static struct fd_elem *find_fd_elem_by_fd_in_process (int fd) {
  * occurred. */
  
 static int
-get_user_byte (const uint8_t *uaddr)		// Modified get_user to return 32-bit(4 bytes) result to the calling function 
+get_user_byte (int *uaddr)		// Modified get_user to return 32-bit(4 bytes) result to the calling function 
 {
   int result;
+  char *s= (char *)uaddr;
   // Checking validity of the passed address
   if(!is_user_vaddr(uaddr) || uaddr==0 || uaddr==NULL )
   {
@@ -385,7 +388,7 @@ get_user_byte (const uint8_t *uaddr)		// Modified get_user to return 32-bit(4 by
  * and shifting the obtained values by appropriate amount to get the 32-bit address.*/
   else
   {
-	  result=get_user(uaddr)+(get_user(uaddr)<<8)+(get_user(uaddr)<<16)+(get_user(uaddr)<<24);
+	  result=get_user((uint8_t *)(s))+(get_user((uint8_t *)(s+1))<<8)+(get_user((uint8_t *)(s+2))<<16)+(get_user((uint8_t *)(s+3))<<24);
 	  return result;		
   }
 }
