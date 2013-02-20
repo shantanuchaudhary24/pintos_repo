@@ -132,7 +132,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 		case SYS_WRITE : 
 			if (!(is_user_vaddr (p + 1) && is_user_vaddr (p + 2) && is_user_vaddr (p + 3)))
 				exit(-1);						  
-			ret = (unsigned)write(*(p + 1), (void*)(p + 2), *(p + 3));
+			ret = (unsigned)write(*(p + 1), *(p + 2), *(p + 3));
 			f->eax = ret; 
 			break;
 		case SYS_SEEK :  
@@ -280,13 +280,11 @@ static int write (int fd, const void *buffer, unsigned size){
 //	unsigned i = 0;
 	if(fd == STDOUT_FILENO){
 //		char * s = (char *)buffer;
-		printf("yippee 1\n");
 //		for(i = 0; i < size; i++)
 //			putchar ((int)*(s+i));
 		putbuf(buffer, size);
 	}
 	else if (fd == STDIN_FILENO){
-		printf("yippee 2\n");
 		exit(-1);
 	}
 	else if(!is_user_vaddr (buffer) || !is_user_vaddr (buffer + size)){
@@ -295,7 +293,6 @@ static int write (int fd, const void *buffer, unsigned size){
 	else{
 		File = find_file_by_fd(fd);
 		if(!File){
-			printf("yippee 3\n");
 			return -1;
 		}
 		
