@@ -377,17 +377,15 @@ get_user_byte (const uint32_t *uaddr)		// Modified get_user to return 32-bit(4 b
 {
   int result;
   // Checking validity of the passed address
-  if(!is_user_vaddr(uaddr))
+  if(!is_user_vaddr(uaddr) || uaddr==0 || uaddr==NULL || pagedir_get_page(current_thread()->pagedir,uaddr)==NULL)
   {
       return -1;
   }
-  
 /* calculating 32-bit(4 BYTES) value by using the given get_user function 
  * and shifting the obtained values by appropriate amount to get the 32-bit address.*/
- 
   else
   {
-	  result=get_user((const uint8_t *)uaddr) + ( get_user((const uint8_t *)uaddr)<<8 ) + ( get_user((const uint8_t *)uaddr)<<16 ) + ( get_user((const uint8_t *)uaddr)<<24 );
+	  result=get_user((const uint8_t *)uaddr) + ( get_user((const uint8_t *)uaddr)<<8 ) + ( get_user((const uint8_t *)uaddr)<<16 ) + (get_user((const uint8_t *)uaddr)<<24 );
 	  return result;		
   }   
 }
@@ -397,15 +395,10 @@ get_user_byte (const uint32_t *uaddr)		// Modified get_user to return 32-bit(4 b
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
    occurred. */
-   
 static int
 get_user (const uint8_t *uaddr)
 {
   int result;
-  if(!is_user_vaddr(uaddr) || uaddr==NULL)
-  {
-		result=-1;
-  }
   asm ("movl $1f, %0; movzbl %1, %0; 1:"
        : "=&a" (result) : "m" (*uaddr));
   return result;
@@ -418,13 +411,8 @@ static bool
 put_user (uint8_t *udst, uint8_t byte)
 {
   int error_code;
-  if(!is_user_vaddr(udst) || udst==NULL)
-  {
-        return false;
-  }
   asm ("movl $1f, %0; movb %b2, %1; 1:"
        : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-  return error_code!=(-1);
+  return error_code != -1;
 }
-
 // Lab 2 Implementation end
