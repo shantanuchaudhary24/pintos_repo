@@ -22,10 +22,15 @@ struct fd_elem {
 	int fd;
 	struct file *File;
 	struct list_elem elem;
-//	struct list_elem thread_elem;
+	struct list_elem thread_elem;
 };
 
-static struct list file_list; 
+static struct list fileList; 
+static struct lock fileLock;
+static struct file *findFile (int fd);
+static struct fd_elem *findFdElem (int fd);
+static int alloc_fid (void);
+static struct fd_elem *findFdElemProcess (int fd);
 
 static void syscall_handler (struct intr_frame *);
 static int write (int fd, const void *buffer, unsigned size);
@@ -45,15 +50,11 @@ static int get_user_byte(int *uaddr);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
 
-static struct file *find_file_by_fd (int fd);
-static struct fd_elem *find_fd_elem_by_fd (int fd);
-static int alloc_fid (void);
-//static struct fd_elem *find_fd_elem_by_fd_in_process (int fd);
-
 
 void syscall_init (void) {
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
-  list_init(&file_list);
+  list_init(&fileList);
+  lock_init(&fileLock);
 }
 
 
@@ -63,7 +64,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 	thread_exit ();*/
 	int *p;
 	unsigned ret = 0;
-   int arg1=0,arg2=0,arg3=0;
+    int arg1=0,arg2=0,arg3=0;
 	p = f->esp;
   
 	if (!is_user_vaddr (p))
@@ -172,7 +173,13 @@ return;
 // Exit System Call 
 void exit(int status){
 	struct thread *t;
+	struct list_elem *l;
 	t = thread_current ();   
+	//~ while(!list_empty(&t->files)){
+		//~ l = list_begin(&t->files);
+		//~ printf("check\n");
+		//~ close(list_entry(l, struct fd_elem, thread_elem)->fd);
+	//~ }
 	t->status = status;
 	thread_exit ();
 	return;
@@ -183,10 +190,13 @@ static int read (int fd, void *buffer, unsigned size){
 	int ret = -1;
 	unsigned i;
 
+	
 	if(fd == 0){
+		lock_acquire(&fileLock);
 		for (i = 0; i < size; i++)
 			*(uint8_t *)(buffer + i) = input_getc ();
 		ret = size;
+		lock_release(&fileLock);
 	}
 	else if (fd == 1){
 		exit(-1);
@@ -195,11 +205,13 @@ static int read (int fd, void *buffer, unsigned size){
 		exit(-1);
 	}
 	else{
-		File = find_file_by_fd(fd);
+		lock_acquire(&fileLock);
+		File = findFile(fd);
 		if(!File)
 			return -1;
 		
 		ret = file_read(File, buffer, size);
+		lock_release(&fileLock);
 	}
 	return ret;	
 }
@@ -213,11 +225,9 @@ static int open (const char *File){
 		return ret;
 	if (!is_user_vaddr (File))
 		exit (-1);
-	
 	F = filesys_open (File);
 	if (!F)
 		return ret;
-
 	FDE = (struct fd_elem *)malloc(sizeof(struct fd_elem));
 	if (!FDE){
 	  file_close (F);
@@ -226,8 +236,8 @@ static int open (const char *File){
 
 	FDE->File = F;
 	FDE->fd = alloc_fid ();
-	list_push_back (&file_list, &FDE->elem);
-//	list_push_back (&thread_current ()->files, &FDE->thread_elem);
+	list_push_back (&fileList, &FDE->elem);
+	list_push_back (&thread_current ()->files, &FDE->thread_elem);
 	ret = FDE->fd;
 	return ret;
 }
@@ -235,26 +245,29 @@ static int open (const char *File){
 static void close (int fd){
 	struct fd_elem *f;
 
-//	f = find_fd_elem_by_fd_in_process (fd);
-	f = find_fd_elem_by_fd (fd);
-
+	f = findFdElemProcess (fd);
+//	f = findFdElem (fd);
+	
 	if (!f)
 		return;
 	
 	file_close (f->File);
 	list_remove (&f->elem);
-//	list_remove (&f->thread_elem);
+	list_remove (&f->thread_elem);
 	free (f);
 }
 
 static pid_t exec (const char *cmd_line){
+	int ret = -1;
 	if (!cmd_line)
-		return -1;
+		return ret;
 	
 	if(!is_user_vaddr (cmd_line))
 		exit(-1);
-		
-	return process_execute (cmd_line);
+	lock_acquire(&fileLock);
+	ret = process_execute(cmd_line);
+	lock_release(&fileLock);
+	return ret;
 }
 
 static int wait (pid_t pid){
@@ -263,7 +276,7 @@ static int wait (pid_t pid){
 
 static int filesize (int fd){
 	struct file *File;
-	File = find_file_by_fd (fd);
+	File = findFile (fd);
 	if (!File)
 		return -1;
 	return file_length(File);
@@ -271,7 +284,7 @@ static int filesize (int fd){
 
 static unsigned tell (int fd){
 	struct file *File;
-	File = find_file_by_fd (fd);
+	File = findFile (fd);
 	if (!File)
 		return -1;
 	return file_tell (File);
@@ -279,7 +292,7 @@ static unsigned tell (int fd){
 
 static void seek (int fd, unsigned position){
 	struct file *File;
-	File = find_file_by_fd (fd);
+	File = findFile (fd);
 	if (!File)
 		return;
 	file_seek (File, position);
@@ -291,14 +304,9 @@ static void halt (void){
 }
 
 static int write (int fd, const void *buffer, unsigned size){
-//	printf("%s", (char*)buffer);
 	struct file *File;
 	int ret = -1;
-//	unsigned i = 0;
 	if(fd == STDOUT_FILENO){
-//		char * s = (char *)buffer;
-//		for(i = 0; i < size; i++)
-//			putchar ((int)*(s+i));
 		putbuf(buffer, size);
 	}
 	else if (fd == STDIN_FILENO){
@@ -308,14 +316,15 @@ static int write (int fd, const void *buffer, unsigned size){
 		exit(-1);
 	}
 	else{
-		File = find_file_by_fd(fd);
+		lock_acquire(&fileLock);
+		File = findFile(fd);
 		if(!File){
 			return -1;
 		}
 		
 		ret = file_write(File, buffer, size);
+		lock_release(&fileLock);
 	}
-//	printf("check \n");
 	return ret;	
 }
 
@@ -333,30 +342,32 @@ static bool remove (const char *file){
 	if(!is_user_vaddr(file))
 		exit(-1);
 	
+	printf("file removed\n");
 	return filesys_remove(file);
 }
 	
 static int alloc_fid(void){
 	int fid = 2;
-	while(find_fd_elem_by_fd(fid)!=NULL){
+	while(findFdElem(fid)!=NULL){
 		fid++;
 	}
+	printf("allocated fid = %d\n", fid);
 	return fid;
 }
 
-static struct file * find_file_by_fd (int fd) {
+static struct file * findFile (int fd) {
   struct fd_elem *ret;
-  ret = find_fd_elem_by_fd (fd);
+  ret = findFdElem (fd);
   if (!ret)
     return NULL;
   return ret->File;
 }
 
-static struct fd_elem *find_fd_elem_by_fd (int fd) {
+static struct fd_elem *findFdElem (int fd) {
 	struct fd_elem *ret;
 	struct list_elem *l;
 
-	for (l = list_begin (&file_list); l != list_end (&file_list); l = list_next (l)){
+	for (l = list_begin (&fileList); l != list_end (&fileList); l = list_next (l)){
 		ret = list_entry (l, struct fd_elem, elem);
 		if (ret->fd == fd)
 			return ret;
@@ -365,12 +376,12 @@ static struct fd_elem *find_fd_elem_by_fd (int fd) {
 	return NULL;
 }
 
-/*
-static struct fd_elem *find_fd_elem_by_fd_in_process (int fd) {
+
+static struct fd_elem *findFdElemProcess (int fd) {
 	struct fd_elem *ret;
 	struct list_elem *l;
 	struct thread *t;
-
+	printf("sjdbfkjbsakjdfkjabdfjbhajdfjbajdsbfkjabksdjf\n\n\n\n\n");
 	t = thread_current ();
 
 	for (l = list_begin (&t->files); l != list_end (&t->files); l = list_next (l)) {
@@ -381,7 +392,7 @@ static struct fd_elem *find_fd_elem_by_fd_in_process (int fd) {
 
 	return NULL;
 }
-*/	
+
 
 // Lab 2 Implementation
 /* Reads 4 BYTES at user virtual address UADDR.

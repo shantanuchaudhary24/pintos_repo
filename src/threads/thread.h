@@ -101,6 +101,9 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+    
+    //LAB2 IMPLEMENTATION
+    struct list files;
   };
 
 /* If false (default), use round-robin scheduler.
