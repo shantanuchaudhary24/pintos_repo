@@ -192,7 +192,6 @@ static int read (int fd, void *buffer, unsigned size){
 	struct file *File;
 	int ret = -1;
 	unsigned i;
-
 	
 	if(fd == 0){
 		lock_acquire(&fileLock);
@@ -210,8 +209,10 @@ static int read (int fd, void *buffer, unsigned size){
 	else{
 		lock_acquire(&fileLock);
 		File = findFile(fd);
-		if(!File)
+		if(!File){
+			lock_release(&fileLock);
 			return -1;
+		}
 		
 		ret = file_read(File, buffer, size);
 		lock_release(&fileLock);
@@ -226,7 +227,7 @@ static int open (const char *File){
 	
 	if (!File)
 		return ret;
-	if (!is_user_vaddr(File))
+	if (get_user_byte((int *)File)==-1) 
 		exit (-1);
 	F = filesys_open (File);
 	if (!F)
@@ -266,7 +267,7 @@ static pid_t exec (const char *cmd_line){
 		return ret;
 	//printf("%s",cmd_line);
 	
-	if(!is_user_vaddr(cmd_line)==-1)
+	if(get_user_byte((int *)cmd_line)==-1)
 		exit(-1);
 	lock_acquire(&fileLock);
 	ret = process_execute(cmd_line);
@@ -318,13 +319,14 @@ static int write (int fd, const void *buffer, unsigned size){
 	else if (fd == STDIN_FILENO){
 		ret = -1;
 	}
-	else if(!is_user_vaddr(buffer) || !is_user_vaddr(buffer + size)){
+	else if(get_user_byte((int *)buffer)==-1 || get_user_byte((int *)(buffer + size)) == -1){
 		exit(-1);
 	}
 	else{
 		lock_acquire(&fileLock);
 		File = findFile(fd);
 		if(!File){
+			lock_release(&fileLock);
 			return -1;
 		}
 		
@@ -335,7 +337,7 @@ static int write (int fd, const void *buffer, unsigned size){
 }
 
 static bool create (const char *file, unsigned initial_size){
-	if (!file)
+	if (!file || get_user_byte((int *)file) == -1)
 		exit(-1);
 	
 	return filesys_create (file, initial_size);
