@@ -27,8 +27,8 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 
 
-# define RET_STATUS_DEFAULT 0
-# define RET_STATUS_INVALID -1
+# define RET_STATUS_DEFAULT 0xcdcdcdcd
+# define RET_STATUS_INVALID 0xdcdcdcdc
 
 /* A kernel thread or user process.
 
@@ -114,6 +114,10 @@ struct thread
     struct thread *parent;
     bool exited;
     struct file *self;
+    
+    //CHILDREN
+//    struct list children;               /* all children process */
+//    struct list_elem children_elem;     /* in children list */
   };
 
 /* If false (default), use round-robin scheduler.

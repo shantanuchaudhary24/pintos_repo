@@ -217,6 +217,13 @@ thread_create (const char *name, int priority,
   t->ret_status = RET_STATUS_DEFAULT;
   list_init (&t->files);
   t->parent = thread_current ();
+  
+  //CHILDREN
+  /*
+  list_init (&t->children);
+  if (thread_current () != initial_thread)
+    list_push_back (&thread_current ()->children, &t->children_elem);
+  */
   t->exited = false;
 //===
   return tid;
@@ -301,7 +308,32 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
+/*
+  struct list_elem *l;
+  struct thread *t, *cur;
+  
+  cur = thread_current ();
+
+  for (l = list_begin (&cur->children); l != list_end (&cur->children); l = list_next (l))
+    {
+      t = list_entry (l, struct thread, children_elem);
+      if (t->status == THREAD_BLOCKED && t->exited)
+        thread_unblock (t);
+      else
+        {
+          t->parent = NULL;
+          list_remove (&t->children_elem);
+        }
+        
+    }
+  /* == My Implementation */
   process_exit ();
+  /* My Implementation 
+  ASSERT (list_size (&cur->files) == 0);
+  
+  if (cur->parent && cur->parent != initial_thread)
+    list_remove (&cur->children_elem);
+	*/
 #endif
 
   /* Remove thread from all threads list, set our status to dying,

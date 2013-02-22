@@ -61,8 +61,8 @@ void syscall_init (void) {
 
 static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 	
-	/*printf ("system call!\n");
-	thread_exit ();*/
+	
+//	thread_exit ();
 	int *p;
 	unsigned ret = 0;
     int arg1=0,arg2=0,arg3=0;
@@ -73,18 +73,20 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
   
 	if (*p < SYS_HALT || *p > SYS_CLOSE)
 		exit(-1);
-    
 	switch(*p){
 		case SYS_HALT : 
+			printf ("system call - HALT\n");
 			halt();					  
 			break;
 		case SYS_CLOSE : 
+			printf ("system call - CLOSE\n");
 			arg1=get_user_byte((p + 1));
 			if (arg1==(-1))
 				exit(-1);						  
 			close(arg1); 
 			break;
 		case SYS_CREATE : 
+			printf ("system call - CREATE\n");
 			arg1=get_user_byte(p+1);
 			arg2=get_user_byte(p+2);
 			if (arg1==(-1) || arg2==(-1))
@@ -93,6 +95,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			f->eax = ret; 
 				break;
 		case SYS_EXEC : 
+			printf ("system call - EXEC\n");
 			arg1=get_user_byte(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -100,12 +103,14 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			f->eax = ret; 
 			break;
 		case SYS_EXIT : 
+			printf ("system call - EXIT\n");
 			arg1=get_user_byte(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
 			exit(arg1);
 			break;
 		case SYS_FILESIZE : 
+			printf ("system call - FILESIZE\n");
 			arg1=get_user_byte(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -113,6 +118,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			f->eax = ret; 
 			break;
 		case SYS_OPEN : 
+			printf ("system call - OPEN\n");
 			arg1=get_user_byte(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -120,6 +126,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			f->eax = ret; 
 			break;
 		case SYS_WAIT :
+			printf ("system call - WAIT\n");
 			arg1=get_user_byte(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -127,6 +134,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			f->eax = ret; 
 			break;
 		case SYS_REMOVE : 
+			printf ("system call - REMOVE\n");
 			arg1=get_user_byte(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -134,6 +142,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			f->eax = ret; 
 			break;
 		case SYS_READ :
+			printf ("system call - READ\n");
 			arg1=get_user_byte(p+1);
 			arg2=get_user_byte(p+2);
 			arg3=get_user_byte(p+3);
@@ -143,6 +152,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			f->eax = ret; 
 			break;
 		case SYS_WRITE : 
+			printf ("system call - WRITE\n");
 			arg1=get_user_byte(p+1);
 			arg2=get_user_byte(p+2);
 			arg3=get_user_byte(p+3);
@@ -152,6 +162,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			f->eax = ret; 
 			break;
 		case SYS_SEEK :  
+			printf ("system call - SEEK\n");
 			arg1=get_user_byte(p+1);
 			arg2=get_user_byte(p+2);
 			if (arg1==(-1) || arg2==(-1))
@@ -159,6 +170,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			seek(arg1, (unsigned)arg2);
 			break; 
 		case SYS_TELL :  
+			printf ("system call - TELL\n");
 			arg1=get_user_byte(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -166,7 +178,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			f->eax = ret; 
 			break;
 		default:
-			exit(-1);
+			thread_exit();
 	}
 return;
 }
@@ -203,7 +215,7 @@ static int read (int fd, void *buffer, unsigned size){
 	else if (fd == 1){
 		ret = -1;
 	}
-	else if(!is_user_vaddr(buffer) || !is_user_vaddr(buffer + size)){
+	else if(get_user_byte((int *)buffer)==-1 || get_user_byte((int *)(buffer + size))==-1){
 		exit(-1);
 	}
 	else{
@@ -276,6 +288,8 @@ static pid_t exec (const char *cmd_line){
 }
 
 static int wait (pid_t pid){
+	if(!get_thread_by_tid(pid))
+		exit(-1);
 	return process_wait(pid);
 }
 
@@ -423,7 +437,7 @@ get_user_byte (int *uaddr)		// Modified get_user to return 32-bit(4 bytes) resul
   else
   {
 	  result=get_user((uint8_t *)(s))+(get_user((uint8_t *)(s+1))<<8)+(get_user((uint8_t *)(s+2))<<16)+(get_user((uint8_t *)(s+3))<<24);
-	  return result;		
+	  return result;
   }
 }
  

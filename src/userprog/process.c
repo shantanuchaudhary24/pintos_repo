@@ -214,7 +214,7 @@ process_wait (tid_t child_tid /*UNUSED*/)
   //struct thread *current;
   //current=thread_current();       // this gives us the current thread
   
-    struct thread *t;
+  struct thread *t;
   int ret;
   
   ret = -1;
@@ -229,7 +229,8 @@ process_wait (tid_t child_tid /*UNUSED*/)
 
   sema_down (&t->wait);
   ret = t->ret_status;
-  printf ("%s: exit(%d)\n", t->name, t->ret_status);
+  printf ("%s: exit(%d)\n", t->name, (t->ret_status<0?-1:t->ret_status));
+//  printf ("%s: exit(%d)\n", t->name, (t->ret_status));
   while (t->status == THREAD_BLOCKED)
     thread_unblock (t);
   
@@ -267,7 +268,7 @@ process_exit (void)
       /* Correct ordering here is crucial.  We must set
          cur->pagedir to NULL before switching page directories,
          so that a timer interrupt can't switch back to the
-         process page directory.  We must activate the base page
+         process page directory.  We must activate the base page 
          directory before destroying the process's page
          directory, or our active page directory will be one
          that's been freed (and cleared). */
