@@ -217,7 +217,7 @@ thread_create (const char *name, int priority,
   t->ret_status = RET_STATUS_DEFAULT;
   list_init (&t->files);
   t->parent = thread_current ();
-  
+//==LAB2 IMPLEMEMTATION  
   //CHILDREN
   /*
   list_init (&t->children);
