@@ -19,6 +19,8 @@
 #include "threads/vaddr.h"
 #include "lib/string.h"
 #include "lib/stdio.h"
+#include "threads/malloc.h"
+#include "userprog/syscall.h"
 
 #define MAXARGS 32
 
@@ -32,23 +34,51 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 tid_t
 process_execute (const char *file_name) 
 {
-  char *fn_copy;
+  char *fn;
   tid_t tid;
+  struct thread *t;
   
+  char *save;
+  char *fn_f;
   /* Make a copy of FILE_NAME.
      Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page (0);
-  if (fn_copy == NULL)
-    return TID_ERROR;
-  strlcpy (fn_copy, file_name, PGSIZE);
-  
+	fn = palloc_get_page (0);
+	if (fn == NULL)
+		return TID_ERROR;
+	strlcpy (fn, file_name, PGSIZE);
+	
+	fn_f = malloc (strlen (file_name) + 1);
+	if(!fn_f){
+		goto done;
+	}
+  memcpy (fn_f, file_name, strlen (file_name) + 1);
+  file_name = strtok_r (fn_f, " ", &save);
+  //printf("%s",file_name);
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
-    palloc_free_page (fn_copy); 
-    
+	tid = thread_create (file_name, PRI_DEFAULT, start_process, fn);
+	if (tid == TID_ERROR)
+		goto done;
   
-  return tid;
+  // LAB2 IMPLEMENTATION
+  // get thread for a given tid
+	t = get_thread_by_tid(tid);
+	
+	sema_down(&t->wait);
+	if(t->ret_status == -1){
+		tid = TID_ERROR;
+	}
+	while(t->status == THREAD_BLOCKED)
+		thread_unblock(t);
+	if(t->ret_status == -1){
+		process_wait(t->tid);
+	}
+
+done:
+	free(fn_f);
+	if(tid == TID_ERROR){
+		palloc_free_page(fn);
+	}
+	return tid;
 }
 
 /* A thread function that loads a user process and starts it
@@ -68,7 +98,7 @@ start_process (void *file_name_)
   int argc, i;
   int *argv_off;
   size_t file_name_len;
-
+  struct thread* t;
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
@@ -78,9 +108,12 @@ start_process (void *file_name_)
   /*
   initialize the variables argc to 0
   */
+  t = thread_current();
   argc = 0;
   // argv_off is the pointer to an integer. Here it is being pointed to the beginning of a block of 32*integers.
   argv_off = malloc (MAXARGS * sizeof (int));
+  if(!argv_off)
+	goto exit;
   // get the length of the string file_name
   file_name_len = strlen (file_name);
   argv_off[0] = 0;
@@ -100,10 +133,9 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  
-  if (!success)
-    thread_exit ();
-  else {
+  if(success) {
+	  t->self = filesys_open(file_name);
+	  file_deny_write (t->self);
       // load the file_name (all the arguments) on the stack.
       if_.esp -= file_name_len + 1;
       start = if_.esp;
@@ -118,7 +150,7 @@ start_process (void *file_name_)
         {
           if_.esp -= 4;
           *(void **)(if_.esp) = start + argv_off[i]; /* argv[x] */
-          printf("passing argument: %s\n", (start + argv_off[i]));
+//        printf("passing argument: %s\n", (start + argv_off[i]));
         }
 
       // add the pointer to starting pointer on the top of stack
@@ -130,10 +162,24 @@ start_process (void *file_name_)
       // add a return address just to make sure that the format is alwasy same.
       if_.esp -= 4;
       *(int *)(if_.esp) = 0; /* Return address */
+      
+      sema_up (&t->wait);
+      intr_disable ();
+      thread_block ();
+      intr_enable ();
+  }
+  else{
+		free(argv_off);
+		exit:
+		t->ret_status = -1;
+		sema_up (&t->wait);
+		intr_disable ();
+		thread_block ();
+		intr_enable ();
+		thread_exit ();
   }
   
-  hex_dump(0, if_.esp, PHYS_BASE-(int)if_.esp, true);
-  
+//  hex_dump(0, if_.esp, PHYS_BASE-(int)if_.esp, true);
   // free the variable argv_off
   free(argv_off);
   palloc_free_page (file_name);
@@ -163,10 +209,33 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid /*UNUSED*/) 
 {
-  while(1);
-  return -1;
+//  while(1);
+//  return -1;
   //struct thread *current;
   //current=thread_current();       // this gives us the current thread
+  
+    struct thread *t;
+  int ret;
+  
+  ret = -1;
+  t = get_thread_by_tid (child_tid);
+  if (!t || t->status == THREAD_DYING || t->ret_status == RET_STATUS_INVALID)
+    goto done;
+  if (t->ret_status != RET_STATUS_DEFAULT && t->ret_status != RET_STATUS_INVALID)
+    {
+      ret = t->ret_status;
+      goto done;
+    }
+
+  sema_down (&t->wait);
+  ret = t->ret_status;
+  printf ("%s: exit(%d)\n", t->name, t->ret_status);
+  while (t->status == THREAD_BLOCKED)
+    thread_unblock (t);
+  
+done:
+  t->ret_status = RET_STATUS_INVALID;
+  return ret;
   
 
 }
@@ -178,6 +247,18 @@ process_exit (void)
   struct thread *cur = thread_current ();
   uint32_t *pd;
 
+  while (!list_empty (&cur->wait.waiters))
+    sema_up (&cur->wait);
+  file_close(cur->self);
+  cur->self = (NULL);
+  cur->exited = true;
+  if (cur->parent)
+    {
+      intr_disable ();
+      thread_block ();
+      intr_enable ();
+    }
+    
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

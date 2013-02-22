@@ -99,8 +99,8 @@ kill (struct intr_frame *f)
          here.)  Panic the kernel to make the point.  */
       if(f->eip==((char *)f->eax-3))	  // eip contains the value of address of the fault, eax contains the address we need to jump to.
       {
-        f->eip=(void *)f->eax;				// setting value of eip to value of eax
-        f->eax=(-1);			            // setting value of eax to -1
+        f->eip=(void *)f->eax;			// setting value of eip to value of eax
+        f->eax=(-1);			        // setting value of eax to -1
       }			
       else
       {
@@ -155,17 +155,18 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-	
-/* //lab 2 implementation 
+
+  //lab 2 implementation 
   if(!not_present)
-  goto PAGE_FAULT
- //lab 2 implementation
-PAGE_FAULT: 
+  goto PAGE_FAULT;
+  
+  //lab 2 implementation
+  PAGE_FAULT: 
      // lab 2 implementation
     if(!user)		        
     {
-      f->eip=(void *)f->eax;				// setting value of eip to value of eax
-      f->eax=(-1);			            // setting value of eax to -1
+      f->eip=(void *)f->eax;		// setting value of eip to value of eax
+      f->eax=(-1);			        // setting value of eax to -1
     }			
   // lab 2 implementation */	
   /* To implement virtual memory, delete the rest of the function

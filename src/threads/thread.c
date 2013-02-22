@@ -13,7 +13,9 @@
 #include "threads/synch.h"
 #include "threads/vaddr.h"
 #ifdef USERPROG
+//LAB2 IMPLEMENTATION
 #include "userprog/process.h"
+//===
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -210,6 +212,13 @@ thread_create (const char *name, int priority,
   /* Add to run queue. */
   thread_unblock (t);
 
+//LAB2 IMPLEMEMTATION
+  sema_init(&t->wait, 0);
+  t->ret_status = RET_STATUS_DEFAULT;
+  list_init (&t->files);
+  t->parent = thread_current ();
+  t->exited = false;
+//===
   return tid;
 }
 
@@ -568,6 +577,25 @@ schedule (void)
     prev = switch_threads (cur, next);
   schedule_tail (prev); 
 }
+
+struct thread *
+get_thread_by_tid (tid_t tid)
+{
+  struct list_elem *f;
+  struct thread *ret;
+  
+  ret = NULL;
+  for (f = list_begin (&all_list); f != list_end (&all_list); f = list_next (f))
+    {
+      ret = list_entry (f, struct thread, allelem);
+      ASSERT (is_thread (ret));
+      if (ret->tid == tid)
+        return ret;
+    }
+    
+  return NULL;
+}
+
 
 /* Returns a tid to use for a new thread. */
 static tid_t

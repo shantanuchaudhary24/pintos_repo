@@ -5,6 +5,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -24,6 +25,10 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+
+# define RET_STATUS_DEFAULT 0
+# define RET_STATUS_INVALID -1
 
 /* A kernel thread or user process.
 
@@ -104,6 +109,11 @@ struct thread
     
     //LAB2 IMPLEMENTATION
     struct list files;
+    struct semaphore wait;
+    int ret_status;
+    struct thread *parent;
+    bool exited;
+    struct file *self;
   };
 
 /* If false (default), use round-robin scheduler.
@@ -143,3 +153,4 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 #endif /* threads/thread.h */
+struct thread *get_thread_by_tid (tid_t tid);

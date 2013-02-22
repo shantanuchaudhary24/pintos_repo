@@ -15,6 +15,7 @@
 #include "threads/malloc.h"
 #include "devices/input.h"
 #include "threads/synch.h"
+#include "userprog/pagedir.h"
 //#include "lib/kernel/console.c"
 
 
@@ -67,7 +68,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
     int arg1=0,arg2=0,arg3=0;
 	p = f->esp;
   
-	if (!is_user_vaddr (p))
+	if (get_user_byte (p)==-1)
 		exit(-1);
   
 	if (*p < SYS_HALT || *p > SYS_CLOSE)
@@ -90,7 +91,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 				exit(-1);						  
 			ret = (unsigned)create((const char*)arg1, (unsigned)arg2);
 			f->eax = ret; 
-			break;
+				break;
 		case SYS_EXEC : 
 			arg1=get_user_byte(p+1);
 			if (arg1==(-1))
@@ -164,6 +165,8 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			ret = (unsigned)tell(arg1);
 			f->eax = ret; 
 			break;
+		default:
+			exit(-1);
 	}
 return;
 }
@@ -175,12 +178,12 @@ void exit(int status){
 	struct thread *t;
 	struct list_elem *l;
 	t = thread_current ();   
-	//~ while(!list_empty(&t->files)){
-		//~ l = list_begin(&t->files);
-		//~ printf("check\n");
-		//~ close(list_entry(l, struct fd_elem, thread_elem)->fd);
-	//~ }
-	t->status = status;
+	while(!list_empty(&t->files)){
+		l = list_begin(&t->files);
+//		printf("check\n");
+		close(list_entry(l, struct fd_elem, thread_elem)->fd);
+	}
+	t->ret_status = status;
 	thread_exit ();
 	return;
 }
@@ -199,9 +202,9 @@ static int read (int fd, void *buffer, unsigned size){
 		lock_release(&fileLock);
 	}
 	else if (fd == 1){
-		exit(-1);
+		ret = -1;
 	}
-	else if(!is_user_vaddr (buffer) || !is_user_vaddr (buffer + size)){
+	else if(!is_user_vaddr(buffer) || !is_user_vaddr(buffer + size)){
 		exit(-1);
 	}
 	else{
@@ -223,7 +226,7 @@ static int open (const char *File){
 	
 	if (!File)
 		return ret;
-	if (!is_user_vaddr (File))
+	if (!is_user_vaddr(File))
 		exit (-1);
 	F = filesys_open (File);
 	if (!F)
@@ -261,8 +264,9 @@ static pid_t exec (const char *cmd_line){
 	int ret = -1;
 	if (!cmd_line)
 		return ret;
+	//printf("%s",cmd_line);
 	
-	if(!is_user_vaddr (cmd_line))
+	if(!is_user_vaddr(cmd_line)==-1)
 		exit(-1);
 	lock_acquire(&fileLock);
 	ret = process_execute(cmd_line);
@@ -307,12 +311,14 @@ static int write (int fd, const void *buffer, unsigned size){
 	struct file *File;
 	int ret = -1;
 	if(fd == STDOUT_FILENO){
+		lock_acquire(&fileLock);
 		putbuf(buffer, size);
+		lock_release(&fileLock);
 	}
 	else if (fd == STDIN_FILENO){
-		exit(-1);
+		ret = -1;
 	}
-	else if(!is_user_vaddr (buffer) || !is_user_vaddr (buffer + size)){
+	else if(!is_user_vaddr(buffer) || !is_user_vaddr(buffer + size)){
 		exit(-1);
 	}
 	else{
@@ -330,9 +336,9 @@ static int write (int fd, const void *buffer, unsigned size){
 
 static bool create (const char *file, unsigned initial_size){
 	if (!file)
-		return false;
-	else
-		return filesys_create (file, initial_size);
+		exit(-1);
+	
+	return filesys_create (file, initial_size);
 }
 
 static bool remove (const char *file){
@@ -342,7 +348,7 @@ static bool remove (const char *file){
 	if(!is_user_vaddr(file))
 		exit(-1);
 	
-	printf("file removed\n");
+	//printf("file removed\n");
 	return filesys_remove(file);
 }
 	
@@ -351,7 +357,7 @@ static int alloc_fid(void){
 	while(findFdElem(fid)!=NULL){
 		fid++;
 	}
-	printf("allocated fid = %d\n", fid);
+	//printf("allocated fid = %d\n", fid);
 	return fid;
 }
 
@@ -381,7 +387,7 @@ static struct fd_elem *findFdElemProcess (int fd) {
 	struct fd_elem *ret;
 	struct list_elem *l;
 	struct thread *t;
-	printf("sjdbfkjbsakjdfkjabdfjbhajdfjbajdsbfkjabksdjf\n\n\n\n\n");
+	//printf("sjdbfkjbsakjdfkjabdfjbhajdfjbajdsbfkjabksdjf\n\n\n\n\n");
 	t = thread_current ();
 
 	for (l = list_begin (&t->files); l != list_end (&t->files); l = list_next (l)) {
@@ -406,7 +412,7 @@ get_user_byte (int *uaddr)		// Modified get_user to return 32-bit(4 bytes) resul
   int result;
   char *s= (char *)uaddr;
   // Checking validity of the passed address
-  if(!is_user_vaddr(uaddr) || uaddr==0 || uaddr==NULL )
+  if(!is_user_vaddr(uaddr) || uaddr==0 || uaddr==NULL || pagedir_get_page (thread_current()->pagedir, uaddr)==NULL)
   {
       return -1;
   }
