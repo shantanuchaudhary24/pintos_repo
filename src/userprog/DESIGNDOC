@@ -49,8 +49,7 @@ To avoid stack page over flow we have used strlcpy to copy the given file_name t
 ---- RATIONALE ----
 
 >> A3: Why does Pintos implement strtok_r() but not strtok()?
-       The strtok_r() function is a reentrant version of strtok()(refer man pages). The saveptr argument is a pointer to a char * variable that is used internally by strtok_r() in order to maintain context between successive calls that parse the same string.
- In PINTOS, as the kernel separates command line into an executable name and arguments, so we need a reference to the addresses of the arguments we can perform operations upon.
+ The strtok_r() function is a reentrant version of strtok()(refer man pages). The saveptr argument is a pointer to a char * variable that is used internally by strtok_r() in order to maintain context between successive calls that parse the same string. In PINTOS, as the kernel separates command line into an executable name and arguments, so we need a reference to the addresses of the arguments we can perform operations upon.
 	Also different strings may be parsed concurrently using sequences of calls to strtok_r() that specify different saveptr arguments.Also, the strtok() function uses a static buffer while parsing, so it's not thread safe.
 
  
@@ -59,10 +58,9 @@ To avoid stack page over flow we have used strlcpy to copy the given file_name t
 >> and arguments.  In Unix-like systems, the shell does this
 >> separation.  Identify at least two advantages of the Unix approach.
 Following are the advantages of using shell over kernel manged commands:
-> One advantage is that it is easier and safer too use shell based parsing operations. This is because the shell can check the command line for any unsafe arguments before they are passed to the kernel.
-> In UNIX like machines, the above mentioned separation of executable name and arguments enables operations such as redirection, pipelining in the shell itself.
-> The shell adds an abstraction on kernel through which we can filter erroneous commands to the kernel. 
-
+> One advantage is that it is safer to use shell based parsing operations. This is because the shell can check the command line for any unsafe arguments before they are passed to the kernel.The shell adds an abstraction on kernel through which we can filter erroneous commands to the kernel.
+> This approach is flexible.Different shells can choose to interpret and parse arguments in different ways, which could be useful depending on how the user wishes to communicate with programs, or, more importantly, how programs wish to communicate with one another. Having the kernel perform this separation would lead to either more complex code in the kernel to support different argument-passing method or no ability to support other argument-passing schemes.
+> In UNIX like machines, the above mentioned separation of executable name and arguments enables operations such as redirection, pipelining etc.
                              SYSTEM CALLS
                              ============
 
