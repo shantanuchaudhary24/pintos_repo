@@ -97,14 +97,11 @@ kill (struct intr_frame *f)
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
-      //if(f->eip==((char *)f->eax-3))	  // eip contains the value of address of the fault, eax contains the address we need to jump to.
-      //{
+        // LAB2 IMPLEMENTATION
         f->eip=(void *)f->eax;			// setting value of eip to value of eax
-        f->eax=(-1);			        // setting value of eax to -1
-      //}			
-      //else
-      //{
-        intr_dump_frame (f);
+        f->eax=(-1);			          // setting value of eax to -1
+        break;
+        //intr_dump_frame (f);
         //PANIC ("Kernel bug - unexpected interrupt in kernel"); 
       //}
     default:
@@ -155,27 +152,13 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-/*
-  //lab 2 implementation 
-  if(!not_present)
-  goto PAGE_FAULT;
-  
-  //lab 2 implementation
-  PAGE_FAULT: 
-     // lab 2 implementation
-    if(!user)		        
-    {
-      f->eip=(void *)f->eax;		// setting value of eip to value of eax
-      f->eax=(-1);			        // setting value of eax to -1
-    }			
-  // lab 2 implementation */	
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
-  printf ("Page fault at %p: %s error %s page in %s context.\n",
+  /*printf ("Page fault at %p: %s error %s page in %s context.\n",
           fault_addr,
           not_present ? "not present" : "rights violation",
           write ? "writing" : "reading",
-          user ? "user" : "kernel");
+          user ? "user" : "kernel");*/
   kill (f);
 }

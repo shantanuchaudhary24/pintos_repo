@@ -26,7 +26,7 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
-
+// Non Zero and Non negative values for ret_status of a thread
 # define RET_STATUS_DEFAULT 0xcdcdcdcd
 # define RET_STATUS_INVALID 0xdcdcdcdc
 
@@ -112,13 +112,9 @@ struct thread
     struct semaphore wait;
     int ret_status;
     struct thread *parent;
-    bool exited;
+    bool exited;                        /* Checks if the thread has exited or not*/
     struct file *self;
-    
-    //CHILDREN
-//    struct list children;               /* all children process */
-//    struct list_elem children_elem;     /* in children list */
-  };
+};
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.

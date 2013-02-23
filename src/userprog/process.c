@@ -49,7 +49,7 @@ process_execute (const char *file_name)
 	
 	fn_f = malloc (strlen (file_name) + 1);
 	if(!fn_f){
-		goto done;
+		goto end;
 	}
   memcpy (fn_f, file_name, strlen (file_name) + 1);
   file_name = strtok_r (fn_f, " ", &save);
@@ -57,7 +57,7 @@ process_execute (const char *file_name)
   /* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, start_process, fn);
 	if (tid == TID_ERROR)
-		goto done;
+		goto end;
   
   // LAB2 IMPLEMENTATION
   // get thread for a given tid
@@ -73,7 +73,7 @@ process_execute (const char *file_name)
 		process_wait(t->tid);
 	}
 
-done:
+end:
 	free(fn_f);
 	if(tid == TID_ERROR){
 		palloc_free_page(fn);
@@ -150,7 +150,6 @@ start_process (void *file_name_)
         {
           if_.esp -= 4;
           *(void **)(if_.esp) = start + argv_off[i]; /* argv[x] */
-//        printf("passing argument: %s\n", (start + argv_off[i]));
         }
 
       // add the pointer to starting pointer on the top of stack
@@ -179,7 +178,6 @@ start_process (void *file_name_)
 		thread_exit ();
   }
   
-//  hex_dump(0, if_.esp, PHYS_BASE-(int)if_.esp, true);
   // free the variable argv_off
   free(argv_off);
   palloc_free_page (file_name);
@@ -192,11 +190,11 @@ start_process (void *file_name_)
 
   // push all the arguments on the stack in the given format and then intialize the stack pointer
   
-  // asm volatile ("pushl %0" : :);
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
 
+// LAB 2 IMPLEMENTATION
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -207,12 +205,8 @@ start_process (void *file_name_)
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int
-process_wait (tid_t child_tid /*UNUSED*/) 
+process_wait (tid_t child_tid ) 
 {
-//  while(1);
-//  return -1;
-  //struct thread *current;
-  //current=thread_current();       // this gives us the current thread
   
   struct thread *t;
   int ret;
@@ -220,21 +214,20 @@ process_wait (tid_t child_tid /*UNUSED*/)
   ret = -1;
   t = get_thread_by_tid (child_tid);
   if (!t || t->status == THREAD_DYING || t->ret_status == RET_STATUS_INVALID)
-    goto done;
+    goto end;
   if (t->ret_status != RET_STATUS_DEFAULT && t->ret_status != RET_STATUS_INVALID)
     {
       ret = t->ret_status;
-      goto done;
+      goto end;
     }
-
+    
   sema_down (&t->wait);
   ret = t->ret_status;
   printf ("%s: exit(%d)\n", t->name, (t->ret_status<0?-1:t->ret_status));
-//  printf ("%s: exit(%d)\n", t->name, (t->ret_status));
   while (t->status == THREAD_BLOCKED)
     thread_unblock (t);
   
-done:
+end:
   t->ret_status = RET_STATUS_INVALID;
   return ret;
   
@@ -380,15 +373,14 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Allocate and activate page directory. */
   t->pagedir = pagedir_create ();
   if (t->pagedir == NULL) 
-    goto done;
+    goto end;
   process_activate ();
 
   /* Open executable file. */
   file = filesys_open (file_name);
   if (file == NULL) 
     {
-      printf ("load: %s: open failed\n", file_name);
-      goto done; 
+      goto end; 
     }
 
   /* Read and verify executable header. */
@@ -400,8 +392,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
-      goto done; 
+      goto end; 
     }
 
   /* Read program headers. */
@@ -411,11 +402,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
       struct Elf32_Phdr phdr;
 
       if (file_ofs < 0 || file_ofs > file_length (file))
-        goto done;
+        goto end;
       file_seek (file, file_ofs);
 
       if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
-        goto done;
+        goto end;
       file_ofs += sizeof phdr;
       switch (phdr.p_type) 
         {
@@ -429,7 +420,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
         case PT_DYNAMIC:
         case PT_INTERP:
         case PT_SHLIB:
-          goto done;
+          goto end;
         case PT_LOAD:
           if (validate_segment (&phdr, file)) 
             {
@@ -455,24 +446,24 @@ load (const char *file_name, void (**eip) (void), void **esp)
                 }
               if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
-                goto done;
+                goto end;
             }
           else
-            goto done;
+            goto end;
           break;
         }
     }
 
   /* Set up stack. */
   if (!setup_stack (esp))
-    goto done;
+    goto end;
 
   /* Start address. */
   *eip = (void (*) (void)) ehdr.e_entry;
 
   success = true;
 
- done:
+ end:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
   return success;
