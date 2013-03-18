@@ -75,6 +75,7 @@ static void exit (int status);
 // functions for handling the user memory access
 static int get_valid_val(int *uaddr);
 static int get_user (const int *uaddr);
+void terminate_process(void);
 //==LAB2 IMPLEMENTATION
 
 
@@ -543,6 +544,10 @@ static struct fd_elements *findFdElemProcess (int fd) {
 	return NULL;
 }
 
+void terminate_process(void)
+{
+	exit(-1);
+}
 
 // LAB 2 IMPLEMENTATION
 /* Verifies the addresses passed to it by checking if they are

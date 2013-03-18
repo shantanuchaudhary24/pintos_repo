@@ -35,7 +35,7 @@ tid_t
 process_execute (const char *file_name) 
 {
   char *fn;
-  tid_t tid;
+  tid_t tid=0;
   struct thread *t;
   
   char *save;
