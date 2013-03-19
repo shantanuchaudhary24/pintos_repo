@@ -610,13 +610,13 @@ static bool
 install_page (void *upage, void *kpage, bool writable)
 {
   struct thread *t = thread_current ();
-  struct hash *temp_suppl_table=t->suppl_table;
-  bool is_set_supple_table=suppltable_add_page(t->suppl_table, upage, kpage, writable);
+  bool is_set_supple_table=suppltable_set_page(t->suppl_table, upage, kpage, writable);
   bool is_upage_map=(pagedir_get_page (t->pagedir, upage) == NULL);
   bool is_pagedir_set_page=pagedir_set_page (t->pagedir, upage, kpage, writable);
+  
   /* Verify that there's not already a page at that virtual
      address, then map our page there. */
-  
+  // Code Incomplete
   //Lab 3 Code
   /*Code for setting supplementary table here */
   return //insert return code

@@ -103,7 +103,7 @@ struct thread
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
 	//Lab 3 Code
-    struct hash *suppl_table;		/* Supplementary page table of the process*/
+    struct hash suppl_table;    		/* Supplementary page table of the process*/
 #endif
 	//==Lab 3 Code
     /* Owned by thread.c. */
