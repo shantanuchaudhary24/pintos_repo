@@ -2,18 +2,26 @@
 #include "lib/kernel/hash.h"
 #include "filesys/file.h"
 
+// Supplementary page table management structs and function definitions
+#define SWAP 1
+#define FILE 2
+#define MMF  3
+
 struct supptable_page
 {
-		struct hash_elem hash_index;
-		struct file *file;
-		off_t ofs;
-		uint8_t *uaddr;
-		uint32_t read_bytes;
-		uint32_t zero_bytes;
-        bool writable;	
+	struct hash_elem hash_index;
+	int page_type;
+	struct file *file;
+	off_t ofs;
+	void *vaddr;
+	uint32_t read_bytes;
+	uint32_t zero_bytes;
+	bool writable;
+	bool page_loaded;				// whether page is loaded or not	
 };
 bool init_supptable(struct hash *table);
-
-bool supptable_add_page(struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable);
-
-bool supptable_del_page(struct hash *table,struct hash_elem element);
+bool supptable_add_page(struct hash *table,struct supptable_page *page);
+bool supptable_add_file(struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+struct supptable_page *get_supptable_page(struct hash *table, void *vaddr);
+void free_supptable(struct hash *table);
+//bool supptable_add_mmf(struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable);
