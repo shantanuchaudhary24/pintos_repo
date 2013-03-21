@@ -80,6 +80,8 @@ static bool addFrameToTable(void *frame, void *page){
 	lock_acquire(&frameTableLock);
 	list_push_back(&frameTable, &newFrameEntry->listElement);
 	lock_release(&frameTableLock);
+	
+	return true;
 }
 
 //function to remove the specified frame form the frame Table
