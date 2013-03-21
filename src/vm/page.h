@@ -3,16 +3,16 @@
 #include "filesys/file.h"
 
 // Supplementary page table management structs and function definitions
-#define SWAP 1
-#define FILE 2
-#define MMF  3
+#define SWAP 001
+#define FILE 002
+#define MMF  004
 
 struct supptable_page
 {
 	struct hash_elem hash_index;
 	int page_type;
 	struct file *file;
-	off_t ofs;
+	off_t offset;
 	void *vaddr;
 	uint32_t read_bytes;
 	uint32_t zero_bytes;
@@ -24,4 +24,6 @@ bool supptable_add_page(struct hash *table,struct supptable_page *page);
 bool supptable_add_file(struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 struct supptable_page *get_supptable_page(struct hash *table, void *vaddr);
 void free_supptable(struct hash *table);
+void grow_stack(void *vaddr);
+
 //bool supptable_add_mmf(struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable);

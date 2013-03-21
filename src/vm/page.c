@@ -10,7 +10,17 @@ bool init_supptable(struct hash *table);
 
 bool supptable_add_page(struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 
-bool supptable_del_page(struct hash *table,struct hash_elem element);
+bool supptable_add_file(struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+
+struct supptable_page *get_supptable_page(struct hash *table, void *vaddr);
+
+void free_supptable(struct hash *table);
+
+static void supptable_free_page(struct hash_elem *element, void *aux UNUSED);
+
+void write_page_to_file(struct supptable_page *page_entry);
+
+void grow_stack(void *vaddr);
 
 static unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
 
@@ -24,55 +34,115 @@ bool init_supptable(struct hash *table)
 	else return false;	
 }
 
-bool supptable_add_page(struct hash *table,struct supptable_page *page)
+bool supptable_add_page(struct hash *table,struct supptable_page *page_entry)
 {
-	if(table==NULL || page==NULL)
+	if(table==NULL || page_entry==NULL)
 		return false;
-	if(hash_insert(table,&page->hash_index)==NULL)
+	if(hash_insert(table,&page_entry->hash_index)==NULL)
 		return true;
 	else return false;
 }
 
 // Function to add page to supplementary table
-bool supptable_add_file(struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
 	struct thread *t=thread_current();
-	struct supptable_page *page;
-	page=malloc(sizeof(struct supptable_page));
-	if(file==NULL || upage==NULL || page==NULL)
+	struct supptable_page *page_entry;
+	page_entry=malloc(sizeof(struct supptable_page));
+	if(file==NULL || upage==NULL || page_entry==NULL)
 		return false;
-	page->type=FILE;
-	page->file=file;
-	page->ofs=ofs;
-	page->vaddr=upage;
-	page->read_bytes=read_bytes;
-	page->zero_bytes=zero_bytes;
-	page->writable=writable;
-	page->page_loaded=false;
+	switch(type)
+	{
+		case FILE:
+			page_entry->page_type=type;
+			break;
+		case MMF:
+			page_entry->page_type=type;
+			break;
+	}
+	page_entry_entry->file=file;
+	page_entry->offset=ofs;
+	page_entry->vaddr=upage;
+	page_entry->read_bytes=read_bytes;
+	page_entry->zero_bytes=zero_bytes;
+	page_entry->writable=writable;
+	page_entry->page_loaded=false;
 	
-	if(hash_insert(&t->suppl_table,&page->hash_index)==NULL)
+	if(hash_insert(&t->suppl_table,&page_entry->hash_index)==NULL)
 		return true;
 	else {
-		printf("Page already exists in the table");		// Do something else
+		printf("page_entry already exists in the table");		// Do something else
 		return false;
+	}
+}
+
+// If page is dirty
+void write_page_to_file(struct supptable_page *page_entry)
+{
+	if(page_entry->page_type==MMF)
+	{
+		file_seek(page_entry->file,page_entry->offset);
+		file_write(page_entry->file,);
 	}
 }
 
 struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 {
 	struct hash_elem *temp_hash_elem;
-	struct supptable_page page;
-	page.vaddr=vaddr;
-	temp_hash_elem=hash_find(table,&page.hash_index);
+	struct supptable_page page_entry;
+	page_entry.vaddr=vaddr;
+	temp_hash_elem=hash_find(table,&page_entry.hash_index);
 	if(temp_hash_elem!=NULL)
 		return hash_entry(temp_hash_elem,struct supptable_page,hash_index);
 	else return NULL;	
 }
 
-void free_supptable(struct hash *table);
+void free_supptable(struct hash *table)
 {
-	return ;//hash_destroy(table,);	// Need to do something about freeing the supplementary table
+	hash_destroy(table,supptable_free_page);	// Need to do something about freeing the supplementary table
 }
+
+static void supptable_free_page(struct hash_elem *element, void *aux UNUSED)
+{
+	struct supptable_page *temp_page;
+	temp_page=hash_entry(element,struct supptable_page, hash_index);
+	if(temp_page->page_type & SWAP)
+		clear_swap_slot();// clear swap slot too if occupied any
+	free(temp_page);
+}
+
+void grow_stack(void *vaddr)
+{
+	struct thread *t=thread_current();
+	void *temp_page;
+	//temp_page= get addr from Physical memory
+	if(temp_page==NULL)
+		PANIC("Frame allocation failed");
+	else
+	{
+		if(!pagedir_set_page (t->pagedir, pg_round_down(vaddr), temp_page, true))
+			//free frame;
+	}
+}
+
+// Given a page entry load it to the appropriate space...This function needs some other functions to work
+bool load_supptable_page(struct supptable_page *page_entry)
+{
+	bool result=false;
+	switch(page_entry->page_type)
+	{
+		case FILE:
+			load_to_file(page_entry);	
+			break;
+		case MMF
+			load_to_mmf(page_entry);
+			break;
+		case SWAP
+			load_to_swap(page_entry);
+			break;
+	}
+}
+
 
 /* Returns a hash value for page p. */
 unsigned
