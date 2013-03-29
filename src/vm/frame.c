@@ -3,16 +3,18 @@
 #include "threads/malloc.h"
 #include "threads/synch.h"
 #include "threads/palloc.h"
+#include "threads/pte.h"
 #include "lib/kernel/list.h"
 #include "vm/frame.h"
+#include "vm/page.h"
+#include "vm/swap.h"
 
-
-static bool addFrameToList(void *frame, void *page);
+static bool addFrameToTable(void *frame, void *page);
 static void removeFrameFromTable(void *frame);
 static struct frameStruct *getFrameFromTable(void *frame);
 
 static struct frameStruct *findFrameForEviction();
-static bool saveEvictedFrame(struct frameStruct *frame)
+static bool saveEvictedFrame(struct frameStruct *frame);
 
 static struct lock frameTableLock;
 static struct lock lockForEviction;
@@ -65,11 +67,11 @@ void freeFrame(void *frame){
 
 void *evictFrameFor(void *page){
 	struct frameStruct *evictedFrame;
-	
+
 	lock_acquire(&lockForEviction);
 
 	evictedFrame = findFrameForEviction();
-	
+
 	if(evictedFrame == NULL)
 		PANIC("Can't find any Frame to evict");
 
@@ -89,16 +91,19 @@ static struct frameStruct *findFrameForEviction(){
 	struct frameStruct *temp;
 	struct list_elem *e;
 	
-	for((e = list_head(&frameTable)), e != list_tail(&frameTable), e = list_next(e)){
+	for((e = list_head(&frameTable)); e != list_tail(&frameTable); e = list_next(e))
+	{
 		temp = list_entry (e, struct frameStruct, listElement);
-		
-		if(!pagedir_is_accessed(get_thread_by_tid(temp->tid)->pagedir, temp->page)){
+
+		if(!pagedir_is_accessed(get_thread_by_tid(temp->tid)->pagedir, temp->page))
+		{
 			frame = temp;
 			list_remove(e);
-			list_push_back(frameTable, e);
+			list_push_back(&frameTable, e);
 			break;
 		}
-		else{
+		else
+		{
 			pagedir_set_accessed(get_thread_by_tid(temp->tid)->pagedir, temp->page, false);
 		}
 	}
@@ -109,31 +114,31 @@ static bool saveEvictedFrame(struct frameStruct *frame){
 	struct thread *t = get_thread_by_tid(frame->tid);
 	struct supptable_page *spte = get_supptable_page(&t->suppl_page_table, frame->page);
 	size_t swapSlotID;
-	
+
 	if(spte == NULL){
 		spte = calloc(1, sizeof(spte));
 		spte->vaddr = frame->page;
-		spte->type = SWAP;
+		spte->page_type = SWAP;
 		if(!supptable_add_page(&t->suppl_page_table, spte))
 			return false;
 	}
-	
-	if(pagedir_is_dirty(t->pagedir, spte->vaddr) && spte->type == MMF)
+
+	if(pagedir_is_dirty(t->pagedir, spte->vaddr) && spte->page_type == MMF)
 		write_page_to_file(spte);
-	else if(pagedir_is_dirty (t->pagedir, spte->vaddr) || (spte->type != FILE)){
+	else if(pagedir_is_dirty (t->pagedir, spte->vaddr) || (spte->page_type != FILE)){
 		swapSlotID = swap_out_page(spte->vaddr);
 		if(swapSlotID == SWAP_ERROR)
 			return false;
-			
-		swapSlotID->type = spte->type | SWAP;
+
+		spte->page_type = spte->page_type | SWAP;
 	}
-	
+
 	memset(frame->frame, 0, PGSIZE);
 	spte->swap_slot_id = swapSlotID;
 	spte->writable = PTE_W;
 	spte->is_page_loaded = false;
 	page_clear_page(t->pagedir, spte->vaddr);
-	
+
 	return true;
 }
 
@@ -201,4 +206,3 @@ static struct frameStruct *getFrameFromTable(void *frame){
 	
 	return frameTableEntry;
 }
-

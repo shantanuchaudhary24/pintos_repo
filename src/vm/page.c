@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <stddef.h>
-#include "vm/page.h"
 #include "lib/kernel/hash.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
-
+#include "vm/page.h"
+#include "lib/stdbool.h"
 
 bool init_supptable(struct hash *table);
 
@@ -41,10 +41,11 @@ bool init_supptable(struct hash *table)
  * */
 bool supptable_add_page(struct hash *table,struct supptable_page *page_entry)
 {
+	struct hash_elem *temp;
 	if(table==NULL || page_entry==NULL)
 		return false;
-
-	if(hash_insert(table, &page_entry->hash_index)!=NULL)
+	temp=hash_insert(table,&page_entry->hash_index);
+	if(temp==NULL)
 		return true;
 	else return false;
 }
@@ -57,7 +58,7 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 	page_entry=malloc(sizeof(struct supptable_page));
 	if(file==NULL || upage==NULL || page_entry==NULL)
 		return false;
-	switch(type)
+	/*switch(type)
 	{
 		case FILE:
 			page_entry->page_type=type;
@@ -65,7 +66,8 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 		case MMF:
 			page_entry->page_type=type;
 			break;
-	}
+	}*/
+	page_entry->page_type=type;
 	page_entry->file=file;
 	page_entry->offset=ofs;
 	page_entry->vaddr=upage;
@@ -105,7 +107,7 @@ struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 
 void free_supptable(struct hash *table)
 {
-	hash_destroy(table,supptable_free_page);	// Need to do something about freeing the supplementary table
+	hash_destroy(table,supptable_free_page);
 }
 
 static void supptable_free_page(struct hash_elem *element, void *aux UNUSED)
@@ -121,17 +123,20 @@ void grow_stack(void *vaddr)
 {
 	struct thread *t=thread_current();
 	void *temp_page;
-	//temp_page= get addr from Physical memory
+	temp_page= allocateFrame(PAL_USER|PAL_ZERO,temp_page);
 	if(temp_page==NULL)
 		PANIC("Frame allocation failed");
 	else
 	{
-		if(!pagedir_set_page(t->pagedir, pg_round_down(vaddr), temp_page, true));
-			//free frame;
+		if(!pagedir_set_page(t->pagedir, pg_round_down(vaddr), temp_page, true))
+			freeFrame(temp_page);
 	}
 }
 
-// Given a page entry load it to the appropriate space...This function needs some other functions to work
+/* Given a page entry load it to the appropriate
+ * structure.
+ *
+ * */
 bool load_supptable_page(struct supptable_page *page_entry)
 {
 	bool result=false;
@@ -150,7 +155,7 @@ bool load_supptable_page(struct supptable_page *page_entry)
 	return result;
 }
 
-
+/* Auxiliary Functions for hashing */
 /* Returns a hash value for page p. */
 unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED)
 {

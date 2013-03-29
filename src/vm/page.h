@@ -1,15 +1,18 @@
 #include <stdio.h>
 #include "lib/kernel/hash.h"
 #include "filesys/file.h"
+#include "threads/thread.h"
 
-// Supplementary page table management structs and function definitions
 #define SWAP 001
 #define FILE 002
 #define MMF  004
 
+#define STACK_SIZE (8*(1<<20))
+
+/* Supplementary page table management structs and function definitions */
 struct supptable_page
 {
-	/* For Hashing*/
+	/* For Hashing */
 	struct hash_elem hash_index;
 
 	/* Data to be fed into the supplementary page table*/

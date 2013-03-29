@@ -124,7 +124,8 @@ main (void)
   exception_init ();
   syscall_init ();
 #endif
-
+  init_supptable();			// Supplementary table Initialization
+  frameInit();				// Virtual Memory Frame Initialization
   /* Start thread scheduler and enable interrupts. */
   thread_start ();
   serial_init_queue ();

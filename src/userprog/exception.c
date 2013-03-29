@@ -6,7 +6,8 @@
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "userprog/syscall.h"
-
+#include "vm/page.h"
+#include "threads/vaddr.h"
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -88,26 +89,26 @@ kill (struct intr_frame *f)
     case SEL_UCSEG:
       /* User's code segment, so it's a user exception, as we
          expected.  Kill the user process.  */
-      terminate_process();
+    	terminate_process();
+    	break;
 
     case SEL_KCSEG:
-      /* Kernel's code segment, which indicates a kernel bug.
+    {
+    	/* Kernel's code segment, which indicates a kernel bug.
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
-        // LAB2 IMPLEMENTATION
-        f->eip=(void *)f->eax;			// setting value of eip to value of eax
-        f->eax=(-1);			          // setting value of eax to -1
+        intr_dump_frame (f);
+        PANIC ("Kernel bug - unexpected interrupt in kernel");
         break;
-        //intr_dump_frame (f);
-        //PANIC ("Kernel bug - unexpected interrupt in kernel"); 
-      //}
+    }
     default:
       /* Some other code segment?  Shouldn't happen.  Panic the
          kernel. */
       printf ("Interrupt %#04x (%s) in unknown segment %04x\n",
              f->vec_no, intr_name (f->vec_no), f->cs);
       thread_exit ();
+      break;
     }
 }
 
@@ -130,7 +131,7 @@ page_fault (struct intr_frame *f)
   bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
   struct thread *t=thread_current();
-  struct supptable_page page_entry;
+  struct supptable_page *page_entry;
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
      data.  It is not necessarily the address of the instruction
@@ -153,36 +154,44 @@ page_fault (struct intr_frame *f)
   user = (f->error_code & PF_U) != 0;
   
   /* LAB3 IMPLEMENTATION (Handling Page faults) */
-  /* checking for write violation, NULL address, address less than PHYSBASE */
-  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr)
-    terminate_process();
+  switch(f->cs)
+  {
+  	  case SEL_UCSEG:
+  	  {
+	  /* checking for write violation, NULL address, address less than PHYSBASE */
   
-  /* Getting the right page from suppl. table of process. */
-  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
-  
-  /* Load the page to filesystem,mmf or swap as needed*/
-  if(page_entry!=NULL && !page_entry->is_page_loaded)
-   load_supptable_page(page_entry);
-  /* Grow stack when the page is NULL and bounds of the stack is violated*/
-  else if(page_entry==NULL && fault_addr>=(f->esp -32) && ((PHYS_BASE)<=STACK_SIZE))
-   grow_stack(fault_addr);
-  else
-   {
-      if(!pagedir_get_page(t->pagedir, fault_addr))
-      terminate_process();
-   }
-  
-  
-  
-  
-  
-  /* To implement virtual memory, delete the rest of the function
-     body, and replace it with code that brings in the page to
-     which fault_addr refers. */
-  /*printf ("Page fault at %p: %s error %s page in %s context.\n",
-          fault_addr,
-          not_present ? "not present" : "rights violation",
-          write ? "writing" : "reading",
-          user ? "user" : "kernel");*/
-  kill (f);
+	    if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
+	      terminate_process();
+
+	    /* Getting the right page from suppl. table of process. */
+	    page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
+
+	    /* Load the page to filesystem,mmf or swap as needed*/
+	    if(page_entry!=NULL && !page_entry->is_page_loaded)
+	     load_supptable_page(page_entry);
+	    /* Grow stack when the page is NULL and bounds of the stack is violated*/
+	    else if(page_entry==NULL && fault_addr>=(f->esp-32) && fault_addr<=(PHYS_BASE-STACK_SIZE))
+	    	grow_stack(fault_addr);
+	    else
+	     {
+	        if(!pagedir_get_page(t->pagedir, fault_addr))
+	        terminate_process();
+	     }
+  	  } break;
+
+  	  case SEL_KCSEG:
+  	  {
+  	     if (pagedir_get_page(t->pagedir, fault_addr)==NULL)
+  	     {
+  	    	 uint8_t kernel_esp=t->stack;
+  	    	 page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
+  	    	 if(page_entry!=NULL && !page_entry->is_page_loaded)
+  	    		 load_supptable_page(page_entry);
+  	    	 else if(page_entry == NULL && fault_addr >= (kernel_esp-32))
+  	    		 grow_stack(fault_addr);
+  	    	 else terminate_process();
+  	     }
+  	  } break;
+  }
+  kill(f);
 }

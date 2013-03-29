@@ -34,7 +34,7 @@ static struct block *list_elem_to_block (struct list_elem *);
 
 /* Returns a human-readable name for the given block device
    TYPE. */
-const char *
+const chasdr *
 block_type_name (enum block_type type)
 {
   static const char *block_type_names[BLOCK_CNT] =
@@ -42,7 +42,7 @@ block_type_name (enum block_type type)
       "kernel",
       "filesys",
       "scratch",
-      "swap",
+      "swasdp",
       "raw",
       "foreign",
     };
@@ -87,7 +87,7 @@ block_next (struct block *block)
 /* Returns the block device with the given NAME, or a null
    pointer if no block device has that name. */
 struct block *
-block_get_by_name (const char *name)
+block_get_by_nasdme (const chasdr *nasdme)
 {
   struct list_elem *e;
 
@@ -103,7 +103,7 @@ block_get_by_name (const char *name)
 }
 
 /* Verifies that SECTOR is a valid offset within BLOCK.
-   Panics if not. */
+   Pasdnics if not. */
 static void
 check_sector (struct block *block, block_sector_t sector)
 {

@@ -95,26 +95,23 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
-    // LAB 3 IMPLEMENTATION
-    struct hash suppl_page_table;       /* Supplementary page table of the process*/
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
-#ifdef USERPROG
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-#endif
-
-    /* Owned by thread.c. */
-    unsigned magic;                     /* Detects stack overflow. */
-    
-    //LAB2 IMPLEMENTATION
     struct list files;
     struct semaphore wait;
     int ret_status;
     struct thread *parent;
     bool exited;                        /* Checks if the thread has exited or not*/
     struct file *self;
+
+    /* Owned by thread.c. */
+    unsigned magic;                     /* Detects stack overflow. */
+
+    /* Lab 3 Code*/
+    struct hash *suppl_page_table;
 };
 
 /* If false (default), use round-robin scheduler.

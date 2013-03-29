@@ -5,7 +5,7 @@ struct frameStruct {
 	tid_t tid;
 	void *page;
 	struct list_elem listElement;
-}
+};
 
 struct list frameTable;
 

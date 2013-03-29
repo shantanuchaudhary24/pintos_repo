@@ -73,6 +73,8 @@ static void exit (int status);
 
 
 // functions for handling the user memory access
+static void string_check_terminate(char *str);
+static void buffer_check_terminate(const void *buffer, unsigned size);
 static int get_valid_val(int *uaddr);
 static int get_user (const int *uaddr);
 void terminate_process(void);
@@ -108,10 +110,12 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 	*/
 	
 	// LAB2 IMPLEMENTATION
+	struct thread *t = thread_current();
 	int *p;
 	unsigned ret = 0;
     int arg1 = 0, arg2 = 0, arg3 = 0;
 	p = f->esp;
+	t->stack = p ;				/* Saving stack pointer */
 	if (get_valid_val (p)== -1)
 		exit(-1);
 	if (*p < SYS_HALT || *p > SYS_CLOSE)
@@ -209,6 +213,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			break;
 		default:
 			thread_exit();
+			break;
 	}
 return;
 //== LAB2 IMPLEMENTATION
@@ -221,7 +226,7 @@ return;
  * Puts exit status in the return status of the thread for future reference
  * Exits the thread. 
  * */
-void exit(int status){
+static void exit(int status){
 	struct thread *t;
 	struct list_elem *l;
 	t = thread_current ();   
@@ -251,9 +256,9 @@ static int read (int fd, void *buffer, unsigned size){
 	int ret = -1;
 	unsigned i;
 	
-	if(get_valid_val((int *)buffer)==-1 || get_valid_val((int *)(buffer + size))==-1)
-		exit(-1);
-	else if(fd == 0)
+	buffer_check_terminate(buffer,size);
+
+	if(fd == 0)
 	{
 		lock_acquire(&fileLock);
 		for (i = 0; i < size; i++)
@@ -296,8 +301,7 @@ static int open (const char *File){
 	if (!File)
 		return ret;
 	
-	if (get_valid_val((int *)File)==-1) 
-		exit (-1);
+	string_check_terminate(File);
 	F = filesys_open (File);
 	
 	if (!F)
@@ -350,8 +354,9 @@ static pid_t exec (const char *cmd_line){
 	int ret = -1;
 	if (!cmd_line)
 		return ret;
-	if(get_valid_val((int *)cmd_line)==-1)
-		exit(-1);
+
+	string_check_terminate(cmd_line);
+
 	lock_acquire(&fileLock);
 	ret = process_execute(cmd_line);
 	lock_release(&fileLock);
@@ -435,9 +440,9 @@ static void halt (void){
 static int write (int fd, const void *buffer, unsigned size){
 	struct file *File;
 	int ret = -1;
-	if(get_valid_val((int *)buffer)==-1 || get_valid_val((int *)(buffer + size)) == -1)
-		exit(-1);
-	else if (fd == STDIN_FILENO)
+	buffer_check_terminate(buffer,size);
+
+	if (fd == STDIN_FILENO)
 		ret = -1;
 	else if(fd == STDOUT_FILENO){
 		lock_acquire(&fileLock);
@@ -466,8 +471,7 @@ static int write (int fd, const void *buffer, unsigned size){
  * just call filesys_create with the given file name and file size.
  * */
 static bool create (const char *file, unsigned initial_size){
-	if (!file || get_valid_val((int *)file) == -1)
-		exit(-1);
+	string_check_terminate(file);
 	return filesys_create (file, initial_size);
 }
 
@@ -478,8 +482,7 @@ static bool create (const char *file, unsigned initial_size){
  * Otherwise return filesys_remove with the given file name
  * */
 static bool remove (const char *file){
-	if(!is_user_vaddr(file))
-		exit(-1);
+	string_check_terminate(file);
 	if(!file)
 		return false;
 	return filesys_remove(file);
@@ -544,6 +547,57 @@ static struct fd_elements *findFdElemProcess (int fd) {
 	return NULL;
 }
 
+/* Ckecking the address of strings
+ * */
+static void string_check_terminate(char *str)
+{
+	  char* temp = str;
+	  unsigned ptr;
+	  while(*temp) // loop untill NULL is found
+	  {
+    	for(ptr = (unsigned)temp; ptr < (unsigned)(temp+1);
+    		ptr = ptr + (PGSIZE - ptr % PGSIZE));  // jump to last entry of a page
+    	if(ptr==NULL || !is_user_vaddr(ptr))
+    		exit(-1);
+	    ++temp;
+	  }
+}
+
+/* Checking the address of buffer
+ * */
+static void buffer_check_terminate(const void *buffer, unsigned size)
+{
+	unsigned buffer_size = size;
+	void *buffer_tmp = buffer;
+
+	/* Checking the given buffer*/
+	while(buffer_tmp != NULL)
+	{
+	      if (get_valid_val((int *)buffer_tmp)==-1)
+		  exit (-1);
+
+	      /* Advance */
+	      if (buffer_size == 0)
+		  {
+			  /* Terminate loop*/
+			  buffer_tmp = NULL;
+		  }
+		  else if (buffer_size > PGSIZE)
+		  {
+			  buffer_tmp += PGSIZE;
+			  buffer_size -= PGSIZE;
+		  }
+		  else
+		  {
+			  /* last loop */
+			  buffer_tmp = buffer + size - 1;
+			  buffer_size = 0;
+		  }
+	}
+}
+
+/* Function to kill the current thread
+ * */
 void terminate_process(void)
 {
 	exit(-1);
