@@ -11,11 +11,16 @@ static bool addFrameToList(void *frame, void *page);
 static void removeFrameFromTable(void *frame);
 static struct frameStruct *getFrameFromTable(void *frame);
 
+static struct frameStruct *findFrameForEviction();
+static bool saveEvictedFrame(struct frameStruct *frame)
+
 static struct lock frameTableLock;
+static struct lock lockForEviction;
 
 void frameInit(){
 	list_init(&frameTable);
 	lock_init(&frameTableLock);
+	lock_init(&lockForEviction);
 }
 
 void *allocateFrame(enum palloc_flags FLAG, void *page){
@@ -46,23 +51,91 @@ void *allocateFrame(enum palloc_flags FLAG, void *page){
 	else {
 		// if allocation of a new page succeeded, add this new frame to the frameTable
 		if(!addFrameToTable(new_frame, page))
-			PANIC("Can't add Frame Struct to the List");
+			PANIC("Can't add Frame Struct to the Frame Table");
 	}
 	
 	// return the frame;
 	return new_frame;
 }
 
-
-void *evictFrameFor(void *page){
-	//find a frame to evict
-	
-	//save its contents in the swap space
-	
-	//return the frame with updated frameStruct->page = page;
-	return NULL;
+void freeFrame(void *frame){
+	removeFrameFromTable(frame);
+	palloc_free_page(frame);
 }
 
+void *evictFrameFor(void *page){
+	struct frameStruct *evictedFrame;
+	
+	lock_acquire(&lockForEviction);
+
+	evictedFrame = findFrameForEviction();
+	
+	if(evictedFrame == NULL)
+		PANIC("Can't find any Frame to evict");
+
+	if(!saveEvictedFrame(evictedFrame))
+		PANIC("Can't save Evicted Frame");
+	
+	evictedFrame->tid = thread_current()->tid;
+	evictedFrame->page = page;
+
+	lock_release(&lockForEviction);
+
+	return evictedFrame;
+}
+
+static struct frameStruct *findFrameForEviction(){
+	struct frameStruct *frame = NULL;
+	struct frameStruct *temp;
+	struct list_elem *e;
+	
+	for((e = list_head(&frameTable)), e != list_tail(&frameTable), e = list_next(e)){
+		temp = list_entry (e, struct frameStruct, listElement);
+		
+		if(!pagedir_is_accessed(get_thread_by_tid(temp->tid)->pagedir, temp->page)){
+			frame = temp;
+			list_remove(e);
+			list_push_back(frameTable, e);
+			break;
+		}
+		else{
+			pagedir_set_accessed(get_thread_by_tid(temp->tid)->pagedir, temp->page, false);
+		}
+	}
+	return frame;
+}
+
+static bool saveEvictedFrame(struct frameStruct *frame){
+	struct thread *t = get_thread_by_tid(frame->tid);
+	struct supptable_page *spte = get_supptable_page(&t->suppl_page_table, frame->page);
+	size_t swapSlotID;
+	
+	if(spte == NULL){
+		spte = calloc(1, sizeof(spte));
+		spte->vaddr = frame->page;
+		spte->type = SWAP;
+		if(!supptable_add_page(&t->suppl_page_table, spte))
+			return false;
+	}
+	
+	if(pagedir_is_dirty(t->pagedir, spte->vaddr) && spte->type == MMF)
+		write_page_to_file(spte);
+	else if(pagedir_is_dirty (t->pagedir, spte->vaddr) || (spte->type != FILE)){
+		swapSlotID = swap_out_page(spte->vaddr);
+		if(swapSlotID == SWAP_ERROR)
+			return false;
+			
+		swapSlotID->type = spte->type | SWAP;
+	}
+	
+	memset(frame->frame, 0, PGSIZE);
+	spte->swap_slot_id = swapSlotID;
+	spte->writable = PTE_W;
+	spte->is_page_loaded = false;
+	page_clear_page(t->pagedir, spte->vaddr);
+	
+	return true;
+}
 
 // function to add the newly allocated frame to the frame Table
 static bool addFrameToTable(void *frame, void *page){
@@ -74,7 +147,7 @@ static bool addFrameToTable(void *frame, void *page){
 		return false;
 	
 	newFrameEntry->frame = frame;
-	newFrameEntry->pagedir = thread_current()->pagedir;
+	newFrameEntry->tid = thread_current()->tid;
 	newFrameEntry->page = page;
 	
 	lock_acquire(&frameTableLock);
@@ -128,3 +201,4 @@ static struct frameStruct *getFrameFromTable(void *frame){
 	
 	return frameTableEntry;
 }
+
