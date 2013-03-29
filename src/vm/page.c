@@ -34,11 +34,17 @@ bool init_supptable(struct hash *table)
 	else return false;	
 }
 
+/* Function to add page to suppl. table by checking if pointer 
+ * to the table or page_entry passed to it isn't NULL. It then uses
+ * hash functions to insert the entry in the hash table and returns
+ * result appropriately.
+ * */
 bool supptable_add_page(struct hash *table,struct supptable_page *page_entry)
 {
 	if(table==NULL || page_entry==NULL)
 		return false;
-	if(hash_insert(table,&page_entry->hash_index)==NULL)
+
+	if(hash_insert(table, &page_entry->hash_index)!=NULL)
 		return true;
 	else return false;
 }
@@ -60,15 +66,15 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 			page_entry->page_type=type;
 			break;
 	}
-	page_entry_entry->file=file;
+	page_entry->file=file;
 	page_entry->offset=ofs;
 	page_entry->vaddr=upage;
 	page_entry->read_bytes=read_bytes;
 	page_entry->zero_bytes=zero_bytes;
 	page_entry->writable=writable;
-	page_entry->page_loaded=false;
+	page_entry->is_page_loaded=false;
 	
-	if(hash_insert(&t->suppl_table,&page_entry->hash_index)==NULL)
+	if(hash_insert(&t->suppl_page_table,&page_entry->hash_index)==NULL)
 		return true;
 	else {
 		printf("page_entry already exists in the table");		// Do something else
@@ -82,7 +88,7 @@ void write_page_to_file(struct supptable_page *page_entry)
 	if(page_entry->page_type==MMF)
 	{
 		file_seek(page_entry->file,page_entry->offset);
-		file_write(page_entry->file,);
+		file_write(page_entry->file,page_entry->vaddr,page_entry->read_bytes);
 	}
 }
 
@@ -107,7 +113,7 @@ static void supptable_free_page(struct hash_elem *element, void *aux UNUSED)
 	struct supptable_page *temp_page;
 	temp_page=hash_entry(element,struct supptable_page, hash_index);
 	if(temp_page->page_type & SWAP)
-		clear_swap_slot();// clear swap slot too if occupied any
+		swap_clear_slot(temp_page->swap_slot_id);// clear swap slot too if occupied any but in case of sharing this will not be removed
 	free(temp_page);
 }
 
@@ -120,7 +126,7 @@ void grow_stack(void *vaddr)
 		PANIC("Frame allocation failed");
 	else
 	{
-		if(!pagedir_set_page (t->pagedir, pg_round_down(vaddr), temp_page, true))
+		if(!pagedir_set_page(t->pagedir, pg_round_down(vaddr), temp_page, true));
 			//free frame;
 	}
 }
@@ -132,33 +138,30 @@ bool load_supptable_page(struct supptable_page *page_entry)
 	switch(page_entry->page_type)
 	{
 		case FILE:
-			load_to_file(page_entry);	
+			result=load_to_file(page_entry);
 			break;
-		case MMF
-			load_to_mmf(page_entry);
+		case MMF:
+			result=load_to_mmf(page_entry);
 			break;
-		case SWAP
-			load_to_swap(page_entry);
+		case SWAP:
+			result=load_to_swap(page_entry);
 			break;
 	}
+	return result;
 }
 
 
 /* Returns a hash value for page p. */
-unsigned
-page_hash (const struct hash_elem *p_, void *aux UNUSED)
+unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED)
 {
-  const struct supptable_page *p = hash_entry (p_, struct supptable_page, hash_index);
-  return hash_bytes (&p->vaddr, sizeof p->vaddr);
+	const struct supptable_page *p = hash_entry (p_, struct supptable_page, hash_index);
+	return hash_bytes (&p->vaddr, sizeof p->vaddr);
 }
 
 /* Returns true if page a precedes page b. */
-bool
-page_less (const struct hash_elem *a_, const struct hash_elem *b_,
-           void *aux UNUSED)
+bool page_less(const struct hash_elem *a_, const struct hash_elem *b_,void *aux UNUSED)
 {
-  const struct supptable_page *a = hash_entry (a_, struct supptable_page, hash_index);
-  const struct supptable_page *b = hash_entry (b_, struct supptable_page, hash_index);
-
-  return a->vaddr < b->vaddr;
+	const struct supptable_page *a = hash_entry (a_, struct supptable_page, hash_index);
+	const struct supptable_page *b = hash_entry (b_, struct supptable_page, hash_index);
+	return a->vaddr < b->vaddr;
 }

@@ -129,7 +129,8 @@ page_fault (struct intr_frame *f)
   bool write;        /* True: access was write, false: access was read. */
   bool user;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
-
+  struct thread *t=thread_current();
+  struct supptable_page page_entry;
   /* Obtain faulting address, the virtual address that was
      accessed to cause the fault.  It may point to code or to
      data.  It is not necessarily the address of the instruction
@@ -150,6 +151,31 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
+  
+  /* LAB3 IMPLEMENTATION (Handling Page faults) */
+  /* checking for write violation, NULL address, address less than PHYSBASE */
+  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr)
+    terminate_process();
+  
+  /* Getting the right page from suppl. table of process. */
+  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
+  
+  /* Load the page to filesystem,mmf or swap as needed*/
+  if(page_entry!=NULL && !page_entry->is_page_loaded)
+   load_supptable_page(page_entry);
+  /* Grow stack when the page is NULL and bounds of the stack is violated*/
+  else if(page_entry==NULL && fault_addr>=(f->esp -32) && ((PHYS_BASE)<=STACK_SIZE))
+   grow_stack(fault_addr);
+  else
+   {
+      if(!pagedir_get_page(t->pagedir, fault_addr))
+      terminate_process();
+   }
+  
+  
+  
+  
+  
   /* To implement virtual memory, delete the rest of the function
      body, and replace it with code that brings in the page to
      which fault_addr refers. */
