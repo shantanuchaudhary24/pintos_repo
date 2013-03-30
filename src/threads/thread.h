@@ -27,8 +27,8 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 
 // Non Zero and Non negative values for ret_status of a thread
-# define RET_STATUS_DEFAULT 0xcdcdcdcd
-# define RET_STATUS_INVALID 0xdcdcdcdc
+# define RET_STATUS_DEFAULT 1212121
+# define RET_STATUS_INVALID 2121212
 
 /* A kernel thread or user process.
 
@@ -111,7 +111,7 @@ struct thread
     unsigned magic;                     /* Detects stack overflow. */
 
     /* Lab 3 Code*/
-    struct hash *suppl_page_table;
+    struct hash suppl_page_table;
 };
 
 /* If false (default), use round-robin scheduler.

@@ -12,7 +12,7 @@
 /* Error code returned by swap_out_page function on failure*/
 #define SWAP_ERROR SIZE_MAX
 
-void init_swap_space();
-size_t swap_out_page(void vaddr);
+void init_swap_space(void);
+size_t swap_out_page(void *vaddr);
 void swap_in_page(size_t swap_slot,void *vaddr);
 void swap_clear_slot(size_t swap_slot);

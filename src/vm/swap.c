@@ -10,6 +10,11 @@ struct block *swap_disk;
 /* Swap table(Bitmap Table) */
 static struct bitmap *swap_table;
 
+void init_swap_space(void);
+size_t swap_out_page(void *vaddr);
+void swap_in_page(size_t swap_slot,void *vaddr);
+void swap_clear_slot(size_t swap_slot);
+
 /* Initialize the swap space which consists
  * of the swap disk and swap table(bitmap structure).
  * If swap disk assignment fails, it returns NULL.
@@ -18,7 +23,7 @@ static struct bitmap *swap_table;
  * determining number of pages the swap device can contain(refer swap.h).
  * At the end initializes the swap table bits to true.
  * */
-void init_swap_space()
+void init_swap_space(void)
 {
     swap_disk=block_get_role(BLOCK_SWAP);
 
@@ -40,11 +45,11 @@ void init_swap_space()
  * disk.It returns a custom macro SWAP_ERROR if writing to the
  * swap disk fails. On success it returns the swap table slot.
  * */
-size_t swap_out_page(void vaddr)
+size_t swap_out_page(void *vaddr)
 {
-    const void* buffer;
+    void* buffer;
     block_sector_t sector;
-    size_t swap_slot=bitmap_scan_flip(swap_table,SWAP_TABLE_START,SWAP_TABLE_CNT,true);
+    size_t swap_slot=bitmap_scan_and_flip(swap_table,SWAP_TABLE_START,SWAP_TABLE_CNT,true);
     
     if (swap_slot==BITMAP_ERROR)
     return SWAP_ERROR;
@@ -65,7 +70,7 @@ size_t swap_out_page(void vaddr)
  * */
 void swap_in_page(size_t swap_slot,void *vaddr)
 {
-	const void* buffer;
+	void* buffer;
 	block_sector_t sector;
 	size_t counter=0;
 	for(counter=0;counter<NUM_SECTORS_PER_PAGE;counter++)

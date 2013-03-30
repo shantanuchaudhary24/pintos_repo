@@ -45,19 +45,19 @@ static struct fd_elements *findFdElemProcess (int fd);
 // function for handling the system calls
 static void syscall_handler (struct intr_frame *);
 // function for handling the write system call
-static int write (int fd, const void *buffer, unsigned size);
+static int write (int fd, void *buffer, unsigned size);
 // function for handling the halt system call
 static void halt (void);
 // function for handling the create system call
-static bool create (const char *file, unsigned initial_size);
+static bool create (char *file, unsigned initial_size);
 // function for handling the open system call
-static int open (const char *file);
+static int open (char *file);
 // function for handling the close system call
 static void close (int fd);
 // function for handling the read system call
 static int read (int fd, void *buffer, unsigned size);
 // function for handling the exec system call
-static pid_t exec (const char *cmd_line);
+static pid_t exec (char *cmd_line);
 // function for handling the wait system call
 static int wait (pid_t pid);
 // function for handling the filesize system call
@@ -67,14 +67,14 @@ static unsigned tell (int fd);
 // function for handling the seek system call
 static void seek (int fd, unsigned position);
 // function for handling the remove system call
-static bool remove (const char *file);
+static bool remove (char *file);
 // function for handling the exit system call
 static void exit (int status);
 
 
 // functions for handling the user memory access
 static void string_check_terminate(char *str);
-static void buffer_check_terminate(const void *buffer, unsigned size);
+static void buffer_check_terminate(void *buffer, unsigned size);
 static int get_valid_val(int *uaddr);
 static int get_user (const int *uaddr);
 void terminate_process(void);
@@ -115,7 +115,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 	unsigned ret = 0;
     int arg1 = 0, arg2 = 0, arg3 = 0;
 	p = f->esp;
-	t->stack = p ;				/* Saving stack pointer */
+	t->stack = f->esp ;				/* Saving stack pointer */
 	if (get_valid_val (p)== -1)
 		exit(-1);
 	if (*p < SYS_HALT || *p > SYS_CLOSE)
@@ -135,14 +135,14 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			arg2=get_valid_val(p+2);
 			if (arg1==(-1) || arg2==(-1))
 				exit(-1);						  
-			ret = (unsigned)create((const char*)arg1, (unsigned)arg2);
+			ret = (unsigned)create((char*)arg1, (unsigned)arg2);
 			f->eax = ret; 
 				break;
 		case SYS_EXEC : 
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
-			ret = (unsigned)exec((const char*)arg1);
+			ret = (unsigned)exec((char*)arg1);
 			f->eax = ret; 
 			break;
 		case SYS_EXIT : 
@@ -162,7 +162,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
-			ret = (unsigned)open((const char*)(arg1));
+			ret = (unsigned)open((char*)(arg1));
 			f->eax = ret; 
 			break;
 		case SYS_WAIT :
@@ -176,7 +176,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
-			ret = (unsigned)remove((const char*)arg1);
+			ret = (unsigned)remove((char*)arg1);
 			f->eax = ret; 
 			break;
 		case SYS_READ :
@@ -194,7 +194,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			arg3=get_valid_val(p+3);
 			if (arg1==(-1) || arg2==(-1) || arg3==(-1))
 				exit(-1);						  
-			ret = (unsigned)write(arg1, (const void *)arg2, (unsigned)arg3);
+			ret = (unsigned)write(arg1, (void *)arg2, (unsigned)arg3);
 			f->eax = ret; 
 			break;
 		case SYS_SEEK :  
@@ -294,7 +294,7 @@ static int read (int fd, void *buffer, unsigned size){
  * pushes fd_elements->elem in the list,
  * pushes this file into the list of open files for the current thread
  * */
-static int open (const char *File){
+static int open (char *File){
 	struct file *F;
 	struct fd_elements *FDE;
 	int ret = -1;
@@ -349,7 +349,7 @@ static void close (int fd){
  * lock, execute the command, then release the lock and return the status
  * returned by process_execute.
  * */
-static pid_t exec (const char *cmd_line){
+static pid_t exec (char *cmd_line){
 	
 	int ret = -1;
 	if (!cmd_line)
@@ -437,7 +437,7 @@ static void halt (void){
  * i.e. there is no file with the given fd, then release the lock and return -1;
  * Write to the file and release the lock and return the number of bytes written.
  * */
-static int write (int fd, const void *buffer, unsigned size){
+static int write (int fd,void *buffer, unsigned size){
 	struct file *File;
 	int ret = -1;
 	buffer_check_terminate(buffer,size);
@@ -470,7 +470,7 @@ static int write (int fd, const void *buffer, unsigned size){
  * it is stored is not user accessible, then exit(-1)else 
  * just call filesys_create with the given file name and file size.
  * */
-static bool create (const char *file, unsigned initial_size){
+static bool create (char *file, unsigned initial_size){
 	string_check_terminate(file);
 	return filesys_create (file, initial_size);
 }
@@ -481,7 +481,7 @@ static bool create (const char *file, unsigned initial_size){
  * If the memory location is not user accessible, then call exit(-1)
  * Otherwise return filesys_remove with the given file name
  * */
-static bool remove (const char *file){
+static bool remove (char *file){
 	string_check_terminate(file);
 	if(!file)
 		return false;
@@ -557,7 +557,7 @@ static void string_check_terminate(char *str)
 	  {
     	for(ptr = (unsigned)temp; ptr < (unsigned)(temp+1);
     		ptr = ptr + (PGSIZE - ptr % PGSIZE));  // jump to last entry of a page
-    	if(ptr==NULL || !is_user_vaddr(ptr))
+    	if(!is_user_vaddr((void *)ptr))
     		exit(-1);
 	    ++temp;
 	  }
@@ -565,11 +565,11 @@ static void string_check_terminate(char *str)
 
 /* Checking the address of buffer
  * */
-static void buffer_check_terminate(const void *buffer, unsigned size)
+static void buffer_check_terminate(void *buffer, unsigned size)
 {
 	unsigned buffer_size = size;
-	void *buffer_tmp = buffer;
-
+	void *buffer_tmp ;
+	buffer_tmp= buffer;
 	/* Checking the given buffer*/
 	while(buffer_tmp != NULL)
 	{

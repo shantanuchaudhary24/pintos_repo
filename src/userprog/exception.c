@@ -5,6 +5,7 @@
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "userprog/pagedir.h"
 #include "userprog/syscall.h"
 #include "vm/page.h"
 #include "threads/vaddr.h"
@@ -168,7 +169,7 @@ page_fault (struct intr_frame *f)
 
 	    /* Load the page to filesystem,mmf or swap as needed*/
 	    if(page_entry!=NULL && !page_entry->is_page_loaded)
-	     load_supptable_page(page_entry);
+	    	load_supptable_page(page_entry);
 	    /* Grow stack when the page is NULL and bounds of the stack is violated*/
 	    else if(page_entry==NULL && fault_addr>=(f->esp-32) && fault_addr<=(PHYS_BASE-STACK_SIZE))
 	    	grow_stack(fault_addr);
@@ -181,13 +182,13 @@ page_fault (struct intr_frame *f)
 
   	  case SEL_KCSEG:
   	  {
-  	     if (pagedir_get_page(t->pagedir, fault_addr)==NULL)
+  	     printf("Page fault in kernel");
+  		 if (pagedir_get_page(t->pagedir, fault_addr)==NULL)
   	     {
-  	    	 uint8_t kernel_esp=t->stack;
   	    	 page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
   	    	 if(page_entry!=NULL && !page_entry->is_page_loaded)
-  	    		 load_supptable_page(page_entry);
-  	    	 else if(page_entry == NULL && fault_addr >= (kernel_esp-32))
+				load_supptable_page(page_entry);
+  	    	 else if(page_entry == NULL && fault_addr >= (void *)(t->stack-32))
   	    		 grow_stack(fault_addr);
   	    	 else terminate_process();
   	     }

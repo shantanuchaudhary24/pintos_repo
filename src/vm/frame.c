@@ -4,29 +4,34 @@
 #include "threads/synch.h"
 #include "threads/palloc.h"
 #include "threads/pte.h"
+#include "userprog/pagedir.h"
 #include "lib/kernel/list.h"
 #include "vm/frame.h"
 #include "vm/page.h"
 #include "vm/swap.h"
 
+void frameInit(void);
+void *allocateFrame(enum palloc_flags FLAG, void *page);
+void freeFrame(void *frame);
+void *evictFrameFor(void *page);
+
 static bool addFrameToTable(void *frame, void *page);
 static void removeFrameFromTable(void *frame);
-static struct frameStruct *getFrameFromTable(void *frame);
-
-static struct frameStruct *findFrameForEviction();
+static struct frameStruct *getFrameFromTable(void *frame) UNUSED;
+static struct frameStruct *findFrameForEviction(void);
 static bool saveEvictedFrame(struct frameStruct *frame);
 
 static struct lock frameTableLock;
 static struct lock lockForEviction;
 
-void frameInit(){
+void frameInit(void){
 	list_init(&frameTable);
 	lock_init(&frameTableLock);
 	lock_init(&lockForEviction);
 }
 
 void *allocateFrame(enum palloc_flags FLAG, void *page){
-	void * new_frame;
+	void * new_frame = NULL;
 	
 	// allocate a new page from user pool
 	if((FLAG & PAL_USER)){
@@ -86,7 +91,7 @@ void *evictFrameFor(void *page){
 	return evictedFrame;
 }
 
-static struct frameStruct *findFrameForEviction(){
+static struct frameStruct *findFrameForEviction(void){
 	struct frameStruct *frame = NULL;
 	struct frameStruct *temp;
 	struct list_elem *e;
@@ -113,20 +118,20 @@ static struct frameStruct *findFrameForEviction(){
 static bool saveEvictedFrame(struct frameStruct *frame){
 	struct thread *t = get_thread_by_tid(frame->tid);
 	struct supptable_page *spte = get_supptable_page(&t->suppl_page_table, frame->page);
-	size_t swapSlotID;
+	size_t swapSlotID = 0;
 
 	if(spte == NULL){
 		spte = calloc(1, sizeof(spte));
-		spte->vaddr = frame->page;
+		spte->uvaddr = frame->page;
 		spte->page_type = SWAP;
 		if(!supptable_add_page(&t->suppl_page_table, spte))
 			return false;
 	}
 
-	if(pagedir_is_dirty(t->pagedir, spte->vaddr) && spte->page_type == MMF)
+	if(pagedir_is_dirty(t->pagedir, spte->uvaddr) && spte->page_type == MMF)
 		write_page_to_file(spte);
-	else if(pagedir_is_dirty (t->pagedir, spte->vaddr) || (spte->page_type != FILE)){
-		swapSlotID = swap_out_page(spte->vaddr);
+	else if(pagedir_is_dirty (t->pagedir, spte->uvaddr) || (spte->page_type != FILE)){
+		swapSlotID = swap_out_page(spte->uvaddr);
 		if(swapSlotID == SWAP_ERROR)
 			return false;
 
@@ -137,7 +142,7 @@ static bool saveEvictedFrame(struct frameStruct *frame){
 	spte->swap_slot_id = swapSlotID;
 	spte->writable = PTE_W;
 	spte->is_page_loaded = false;
-	page_clear_page(t->pagedir, spte->vaddr);
+	pagedir_clear_page(t->pagedir, spte->uvaddr);
 
 	return true;
 }

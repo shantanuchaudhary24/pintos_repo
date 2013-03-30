@@ -21,12 +21,13 @@
 #include "lib/stdio.h"
 #include "threads/malloc.h"
 #include "userprog/syscall.h"
-
+#include "vm/page.h"
 #define MAXARGS 32
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-
+static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
+              uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -98,12 +99,15 @@ start_process (void *file_name_)
   int argc, i;
   int *argv_off;
   size_t file_name_len;
-  struct thread* t;
+  struct thread* t=thread_current();
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
   if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
   if_.cs = SEL_UCSEG;
   if_.eflags = FLAG_IF | FLAG_MBS;
+
+  /* Initilise Supplementary Page Table*/
+  init_supptable(&t->suppl_page_table);
 
   /*
   initialize the variables argc to 0
@@ -355,6 +359,7 @@ static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
                           bool writable);
+static bool install_page (void *upage, void *kpage, bool writable);
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
@@ -444,7 +449,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              if (!load_segment (file, file_page, (void *) mem_page,
+              if (!lazy_load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
                 goto end;
             }
@@ -471,7 +476,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
 /* load() helpers. */
 
-static bool install_page (void *upage, void *kpage, bool writable);
 
 /* Checks whether PHDR describes a valid, loadable segment in
    FILE and returns true if so, false otherwise. */
@@ -577,6 +581,25 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
   return true;
 }
 
+static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
+              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+{
+	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+	ASSERT (pg_ofs (upage) == 0);
+	ASSERT (ofs % PGSIZE == 0);
+	while (read_bytes > 0 || zero_bytes > 0)
+	{
+		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+        size_t page_zero_bytes = PGSIZE - page_read_bytes;
+        if(supptable_add_file(FILE,file,ofs,upage,read_bytes,zero_bytes,writable))
+        	return true;
+        read_bytes-=page_read_bytes;
+        zero_bytes-=page_zero_bytes;
+        ofs+=page_read_bytes;
+        upage+=PGSIZE;
+	}
+	return false;
+}
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool

@@ -301,7 +301,6 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
-
 #ifdef USERPROG
   process_exit ();
 #endif
@@ -310,8 +309,10 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it call schedule_tail(). */
   intr_disable ();
-  list_remove (&thread_current()->allelem);
-  thread_current ()->status = THREAD_DYING;
+  struct thread *t=thread_current();
+  list_remove (&t->allelem);
+  t->status = THREAD_DYING;
+  free_supptable(&t->suppl_page_table); 			// freeing the supplementary table
   schedule ();
   NOT_REACHED ();
 }
@@ -481,7 +482,6 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  init_supptable(&t->suppl_page_table);       //  initializing supplementary page table of the thread
   list_push_back (&all_list, &t->allelem);
 }
 

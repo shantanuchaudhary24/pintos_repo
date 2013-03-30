@@ -24,12 +24,15 @@
 #include "threads/palloc.h"
 #include "threads/pte.h"
 #include "threads/thread.h"
+
 #ifdef USERPROG
 #include "userprog/process.h"
 #include "userprog/exception.h"
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
+#include "vm/frame.h"
+#include "vm/swap.h"
 #else
 #include "tests/threads/tests.h"
 #endif
@@ -124,9 +127,9 @@ main (void)
   exception_init ();
   syscall_init ();
 #endif
-  init_supptable();			// Supplementary table Initialization
-  frameInit();				// Virtual Memory Frame Initialization
   /* Start thread scheduler and enable interrupts. */
+  frameInit();				// Virtual Memory Frame Initialization
+  init_swap_space();		// Swap Space System
   thread_start ();
   serial_init_queue ();
   timer_calibrate ();
