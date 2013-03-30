@@ -584,6 +584,7 @@ static void buffer_check_terminate(void *buffer, unsigned size)
  * */
 void terminate_process(void)
 {
+	printf("Call to terminate process\n");
 	exit(-1);
 }
 

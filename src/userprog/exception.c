@@ -160,10 +160,12 @@ page_fault (struct intr_frame *f)
   	  case SEL_UCSEG:
   	  {
 	  /* checking for write violation, NULL address, address less than PHYSBASE */
-  
+  		printf("User page fault\n");
 	    if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
-	      terminate_process();
-
+	    {
+	    	printf("User page fault:not present\n");
+	    	terminate_process();
+	    }
 	    /* Getting the right page from suppl. table of process. */
 	    page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
 
@@ -176,7 +178,10 @@ page_fault (struct intr_frame *f)
 	    else
 	     {
 	        if(!pagedir_get_page(t->pagedir, fault_addr))
-	        terminate_process();
+	        {
+	        	printf("page not set in pagedir");
+	        	terminate_process();
+	        }
 	     }
   	  } break;
 

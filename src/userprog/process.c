@@ -108,6 +108,7 @@ start_process (void *file_name_)
 
   /* Initilise Supplementary Page Table*/
   init_supptable(&t->suppl_page_table);
+  printf("Initialised Supplementary table\n");
 
   /*
   initialize the variables argc to 0
@@ -135,6 +136,7 @@ start_process (void *file_name_)
   
   // load the file 
   success = load (file_name, &if_.eip, &if_.esp);
+  printf("Load ");
 
   /* If load failed, quit. */
   if(success) {
@@ -170,9 +172,11 @@ start_process (void *file_name_)
       intr_disable ();
       thread_block ();
       intr_enable ();
+      printf("Load Successful\n");
   }
   else{
-		free(argv_off);
+	  printf("Load Failed\n");
+	  	free(argv_off);
 		exit:
 		t->ret_status = -1;
 		sema_up (&t->wait);
@@ -385,7 +389,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (file_name);
   if (file == NULL) 
     {
-      goto end; 
+	  printf("Filesystem failure");
+	  goto end;
     }
 
   /* Read and verify executable header. */
@@ -449,8 +454,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              if (!lazy_load_segment (file, file_page, (void *) mem_page,
-                                 read_bytes, zero_bytes, writable))
+              if (!lazy_load_segment (file, file_page, (void *) mem_page,read_bytes, zero_bytes, writable))
                 goto end;
             }
           else
@@ -471,6 +475,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
  end:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
+  printf("Load success\n");
   return success;
 }
 
@@ -584,6 +589,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
+	printf("Lazy load segment enter\n");
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
@@ -592,7 +598,10 @@ static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
         if(supptable_add_file(FILE,file,ofs,upage,read_bytes,zero_bytes,writable))
+        {
+        	printf("lazy load success\n");
         	return true;
+        }
         read_bytes-=page_read_bytes;
         zero_bytes-=page_zero_bytes;
         ofs+=page_read_bytes;

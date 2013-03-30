@@ -12,6 +12,12 @@
 /* Error code returned by swap_out_page function on failure*/
 #define SWAP_ERROR SIZE_MAX
 
+struct struct_swap
+{
+	struct block *swap_disk;
+	struct bitmap *swap_table;
+};
+
 void init_swap_space(void);
 size_t swap_out_page(void *vaddr);
 void swap_in_page(size_t swap_slot,void *vaddr);
