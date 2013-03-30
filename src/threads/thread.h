@@ -110,7 +110,7 @@ struct thread
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
 
-    /* Lab 3 Code*/
+    /* Supplementary Table (Per Process)*/
     struct hash suppl_page_table;
 };
 

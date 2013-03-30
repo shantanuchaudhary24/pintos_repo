@@ -3,10 +3,12 @@
 #include "filesys/file.h"
 #include "threads/thread.h"
 
+/* Determining the type of page of supplementary page */
 #define SWAP 001
 #define FILE 002
 #define MMF  004
 
+/* Defines the size of per process stack*/
 #define STACK_SIZE (8*(1<<20))
 
 /* Supplementary page table management structs and function definitions */

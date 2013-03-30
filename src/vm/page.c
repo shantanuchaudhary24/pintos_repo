@@ -21,13 +21,17 @@ void write_page_to_file(struct supptable_page *page_entry);
 void grow_stack(void *vaddr);
 bool load_supptable_page(struct supptable_page *page_entry);
 
-static bool load_to_swap(struct supptable_page *page_entry);
-static bool load_to_file(struct supptable_page *page_entry);
+static bool load_page_swap(struct supptable_page *page_entry);
+static bool load_page_file(struct supptable_page *page_entry);
 static void supptable_free_page(struct hash_elem *element, void *aux UNUSED);
 static unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less (const struct hash_elem *a_, const struct hash_elem *b_,void *aux UNUSED);
 
-// Function to initialize supplementary table
+/* This function initialises the supplementary table
+ * by call hash_init which is complimented by the use of
+ * page_has and page_less functions.It returns true on success
+ * and false on failure to create the table
+ * */
 bool init_supptable(struct hash *table)
 {
 	if(hash_init(table,page_hash,page_less,NULL))
@@ -51,7 +55,12 @@ bool supptable_add_page(struct hash *table,struct supptable_page *page_entry)
 	else return false;
 }
 
-// Function to add page to supplementary table
+/* This function adds the data into the supplementary page
+ * table.It determines the type of file(namely FILE,MMF,SWAP)
+ * and adds it to the database of suppl. page table using hash_insert
+ * function.The function returns true if it is able to insert the file
+ * data into the table.
+ * */
 bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
 	struct thread *t=thread_current();
@@ -77,7 +86,7 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 	}
 }
 
-// If page is dirty
+
 void write_page_to_file(struct supptable_page *page_entry)
 {
 	if(page_entry->page_type==MMF)
@@ -87,6 +96,11 @@ void write_page_to_file(struct supptable_page *page_entry)
 	}
 }
 
+/* This function fetches a page from the table which is passed to it by reference
+ * using the vaddr.It uses the hash_find function to find the element in the table.
+ * It returns the corresponding page on successfully finding it else it returns
+ * NULL.
+ * */
 struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 {
 	struct hash_elem *temp_hash_elem;
@@ -98,11 +112,21 @@ struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 	else return NULL;	
 }
 
+/* Destroys the supplementary table. When a thread exits this function is
+ * called in order to desroy its supplementary table.This function uses
+ * hash_destroy and an auxiliary function(defined below) to free the suppl.table
+ * */
 void free_supptable(struct hash *table)
 {
 	hash_destroy(table,supptable_free_page);
 }
 
+/* This is the auxiliary function that is called upon each and every entry
+ * of the hash table in order to free the resources captured by it.
+ * The function chooses the element based upon the hash_element passed to it
+ * by using hash_entry function. It also frees the page from swap disk if
+ * the page belongs to the swap space.
+ * */
 static void supptable_free_page(struct hash_elem *element, void *aux UNUSED)
 {
 	struct supptable_page *temp_page;
@@ -112,23 +136,30 @@ static void supptable_free_page(struct hash_elem *element, void *aux UNUSED)
 	free(temp_page);
 }
 
+/* This function is used to grow the stack of a user process when we are
+ * accessing an address which is not the valid bounds of the stack of the
+ * process.It works by allocating a frame corresponding to the vaddr
+ * passed to it.It then sets the page corresponding to the frame.Returns
+ * false on failure and frees the alloted frame.
+ * */
 void grow_stack(void *vaddr)
 {
 	struct thread *t=thread_current();
-	void *temp_page;
-	temp_page= allocateFrame(PAL_USER|PAL_ZERO,vaddr);
-	if(temp_page==NULL)
+	void *temp_frame;
+	temp_frame= allocateFrame(PAL_USER|PAL_ZERO,vaddr);
+	if(temp_frame==NULL)
 		PANIC("Frame allocation failed");
 	else
 	{
-		if(!pagedir_set_page(t->pagedir, pg_round_down(vaddr), temp_page, true))
-			freeFrame(temp_page);
+		if(!pagedir_set_page(t->pagedir, pg_round_down(vaddr), temp_frame, true))
+			freeFrame(vaddr);
 	}
 }
 
 /* Given a page entry load it to the appropriate
- * structure.
- *
+ * appratus.This function first checks the type of page
+ * passed to it and then calls the corresponding functions.
+ * Returns true on success and false on failure.
  * */
 bool load_supptable_page(struct supptable_page *page_entry)
 {
@@ -136,43 +167,49 @@ bool load_supptable_page(struct supptable_page *page_entry)
 	switch(page_entry->page_type)
 	{
 		case FILE:
-			result=load_to_file(page_entry);
+			result=load_page_file(page_entry);
 			break;
 		case MMF:
-			//result=load_to_mmf(page_entry);
+			//result=load_page_mmf(page_entry);
 			PANIC("MMF not implemented");
 			break;
 		case SWAP:
-			result=load_to_swap(page_entry);
+			result=load_page_swap(page_entry);
 			break;
 	}
 	return result;
 }
 
-static bool load_to_swap(struct supptable_page *page_entry)
+/* Extension of load_supptable_page function to load a page
+ * from swap space into the page table.Allocates a frame based
+ * upon the page type, maps the frame to the page table entry.
+ * Frees it if the mapping fails.It then swaps the data from
+ * disk into the memory page table.After swap in, if the page
+ * was a swap page, we remove the corresponding entry from suppl
+ * page table. If it is on the disk then we set the page type
+ * and leave it in the suppl. table. If the load is successful
+ * this function returns true else returns false
+ * */
+static bool load_page_swap(struct supptable_page *page_entry)
 {
 	struct thread *t=thread_current();
-	/* Get a page of memory. */
 	void *kpage;
 	kpage = allocateFrame(PAL_USER,page_entry->uvaddr);
 	if (kpage == NULL)
 		return false;
 
-	/* Map the user page to given frame */
 	if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->swap_writable))
 	{
 		freeFrame (kpage);
 		return false;
 	}
 
-	/* Swap data from disk into memory page */
 	swap_in_page(page_entry->swap_slot_id, page_entry->uvaddr);
     if (page_entry->page_type == SWAP)
-	{
-    	/* After swap in, remove the corresponding entry in suppl page table */
     	hash_delete (&t->suppl_page_table, &page_entry->hash_index);
-	}
-	if (page_entry->page_type == (FILE | SWAP))
+
+	// ???
+    if (page_entry->page_type == (FILE | SWAP))
 	{
 		page_entry->page_type = FILE;
 		page_entry->is_page_loaded = true;
@@ -180,27 +217,32 @@ static bool load_to_swap(struct supptable_page *page_entry)
 	return true;
 }
 
-
-static bool load_to_file(struct supptable_page *page_entry)
+/* Extension of load_supptable_page function to load a page
+ * from disk space into the memory page table.Allocates a frame
+ * based upon the page type, maps the frame to the page table entry.
+ * Frees it if the mapping fails.It then loads the file from
+ * disk into the memory page table.It then zeroes out the suppl
+ * page read_bytes. Then it ,adds the page to the process's address
+ * space. If the load is successful this function returns true
+ * else returns false.
+ * */
+static bool load_page_file(struct supptable_page *page_entry)
 {
 	struct thread *t=thread_current();
 	file_seek (page_entry->file, page_entry->offset);
 
-	/* Get a page of memory. */
 	void *kpage = allocateFrame(PAL_USER,page_entry->uvaddr);
 	if (kpage == NULL)
 		return false;
 
-	/* Load this page. */
 	if (file_read (page_entry->file, kpage,page_entry->read_bytes)!= (int)page_entry->read_bytes)
 	{
 		freeFrame(kpage);
 	    return false;
 	}
 
+	//??
 	memset(kpage + page_entry->read_bytes, 0,page_entry->zero_bytes);
-
-	/* Add the page to the process's address space. */
 	if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->writable))
 	{
 		freeFrame (kpage);

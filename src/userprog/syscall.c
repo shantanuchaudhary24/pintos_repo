@@ -16,10 +16,7 @@
 #include "devices/input.h"
 #include "threads/synch.h"
 #include "userprog/pagedir.h"
-//#include "lib/kernel/console.c"
 
-
-//LAB2 IMPLEMENTATION
 // Structure for the elements in the file desciptor table
 struct fd_elements {
 	int fd;
@@ -30,47 +27,64 @@ struct fd_elements {
 
 // Variable declaration for list of opened files (fd table)
 static struct list fileList; 
+
 // Variable file lock used for locking files during read/write system call
 static struct lock fileLock;
 
 
 // function for finding a file from the fd table given a fd
 static struct file *findFile (int fd);
+
 // function for finding a element of fd list given a fd
 static struct fd_elements *findFdElem (int fd);
+
 // function for allocating a new file descriptor for an newly opened file
 static int alloc_fid (void);
+
 // function for finding a file element in the list of opened files for current thread
 static struct fd_elements *findFdElemProcess (int fd);
+
 // function for handling the system calls
 static void syscall_handler (struct intr_frame *);
+
 // function for handling the write system call
 static int write (int fd, void *buffer, unsigned size);
+
 // function for handling the halt system call
 static void halt (void);
+
 // function for handling the create system call
 static bool create (char *file, unsigned initial_size);
+
 // function for handling the open system call
 static int open (char *file);
+
 // function for handling the close system call
 static void close (int fd);
+
 // function for handling the read system call
 static int read (int fd, void *buffer, unsigned size);
+
 // function for handling the exec system call
 static pid_t exec (char *cmd_line);
+
 // function for handling the wait system call
 static int wait (pid_t pid);
+
 // function for handling the filesize system call
 static int filesize (int fd);
+
 // function for handling the tell system call
 static unsigned tell (int fd);
+
 // function for handling the seek system call
 static void seek (int fd, unsigned position);
+
 // function for handling the remove system call
 static bool remove (char *file);
+
 // function for handling the exit system call
 static void exit (int status);
-
 
 // functions for handling the user memory access
 static void string_check_terminate(char *str);
@@ -78,20 +92,16 @@ static void buffer_check_terminate(void *buffer, unsigned size);
 static int get_valid_val(int *uaddr);
 static int get_user (const int *uaddr);
 void terminate_process(void);
-//==LAB2 IMPLEMENTATION
 
 
 void syscall_init (void) {
 	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 
-	// LAB2 IMPLEMENTATION
-	
 	//initializing the file desciptor list
 	list_init(&fileList);
+
 	//initializing the file lock list
 	lock_init(&fileLock);
-	
-	//== LAB2 IMPLEMENTATION
 }
 
 // System call handler
@@ -101,21 +111,14 @@ void syscall_init (void) {
  * call number is out of range. If so, we exit(-1). Now, corresponding to 
  * each system call, we call the corresponding handler with its arguments.
  * */
-static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
-	
-	/* 
-	 * OLD IMPLEMENTATION
-	printf("Systen Call!\n");
-	thread_exit ();
-	*/
-	
-	// LAB2 IMPLEMENTATION
+static void syscall_handler (struct intr_frame *f /*UNUSED*/)
+{
 	struct thread *t = thread_current();
 	int *p;
 	unsigned ret = 0;
     int arg1 = 0, arg2 = 0, arg3 = 0;
 	p = f->esp;
-	t->stack = f->esp ;				/* Saving stack pointer */
+	t->stack = f->esp ;				/* Saving stack pointer (needed to handle kernel page fault) */
 	if (get_valid_val (p)== -1)
 		exit(-1);
 	if (*p < SYS_HALT || *p > SYS_CLOSE)
@@ -216,12 +219,9 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/) {
 			break;
 	}
 return;
-//== LAB2 IMPLEMENTATION
 }
 
 
-// LAB2 IMPLEMENTATION
-// Exit System Call 
 /* Gets the current thread.Closes all the files opened in this thread.
  * Puts exit status in the return status of the thread for future reference
  * Exits the thread. 
@@ -240,8 +240,6 @@ static void exit(int status){
 	return;
 }
 
-// LAB2 IMPLEMENTATION
-// Read System Call
 /* If the given file descriptor is '0',acquire lock, get input 
  * from the console and then release lock.// if fd is 1, then 
  * do nothing as we can't read from stdout just return -1.
@@ -282,8 +280,6 @@ static int read (int fd, void *buffer, unsigned size){
 	return ret;	
 }
 
-// LAB2 IMPLEMENTATION
-// Open System Call
 /* If the file name is null,it returns -1.If the file name
  * is not user accessible exit(-1). If not any of those things,
  * opens the file. If there is a problem in opening, returns -1.
@@ -323,8 +319,6 @@ static int open (char *File){
 	return ret;
 }
 
-// LAB2 IMPLEMENTATION
-// Close System Call
 /* Find fd element for the given fd out of the list of files
  * opened in this thread. If not found, return, else close 
  * the file and remove it from the list. At last free the
@@ -342,8 +336,6 @@ static void close (int fd){
 	free (f);
 }
 
-// LAB2 IMPLEMENTATION
-// Exec System Call
 /* If the location at which cmd_line is stored is not user accessible,
  * exit(-1). If cmd name(cmd_line) is null, return -1. If none, acquire
  * lock, execute the command, then release the lock and return the status
@@ -363,8 +355,6 @@ static pid_t exec (char *cmd_line){
 	return ret;
 }
 
-// LAB2 IMPLEMENTATION
-// Wait System Call
 /* If there is no thread by the given pid, then exit(-1)
  * else return call process_wait with this pid
  * */
@@ -374,8 +364,6 @@ static int wait (pid_t pid){
 	return process_wait(pid);
 }
 
-// LAB2 IMPLEMENTATION
-// Filesize System Call
 /* Finds file in the list of opened files.
  * If there is no file by that fd, returns -1
  * else it calls file_length to find the size of the given file.
@@ -388,8 +376,6 @@ static int filesize (int fd){
 	return file_length(File);
 }
 
-// LAB2 IMPLEMENTATION
-// Tell System Call
 /* Finds the file with the given fd.
  * If there is no file by that fd, it returns -1
  * else it calls file_tell to find the write offset for that file.
@@ -402,8 +388,6 @@ static unsigned tell (int fd){
 	return file_tell (File);
 }
 
-// LAB2 IMPLEMENTATION
-// Seek System Call
 /* Finds the file with the given fd.
  * If there is no file by that fd, it returns -1 else it calls
  * file_seek to find the change in the write offset for that file
@@ -417,8 +401,6 @@ static void seek (int fd, unsigned position){
 	return;
 }
 
-// LAB2 IMPLEMENTATION
-// Halt System Call
 /* Just calls power_off, which never returns.
  * */
 static void halt (void){
@@ -426,9 +408,7 @@ static void halt (void){
 	NOT_REACHED();
 }
 
-// LAB2 IMPLEMENTATION
-// Write System Call
-/*  If the memory address of buffer to buffer+size is not user accessible,
+/* If the memory address of buffer to buffer+size is not user accessible,
  * call exit(-1).  If the given fd is of the stdin, just return -1, 
  * because we can't write to stdin. If the given fd is of stdout, acquire lock,
  * write buffer on the console, and then release the lock.In every other case,
@@ -464,8 +444,6 @@ static int write (int fd,void *buffer, unsigned size){
 	return ret;	
 }
 
-// LAB2 IMPLEMENTATION
-// Create System Call
 /* If either the file is NULL or the memory location at which
  * it is stored is not user accessible, then exit(-1)else 
  * just call filesys_create with the given file name and file size.
@@ -475,8 +453,6 @@ static bool create (char *file, unsigned initial_size){
 	return filesys_create (file, initial_size);
 }
 
-// LAB2 IMPLEMENTATION
-// Remove System Call
 /* If file is NULL, then return false
  * If the memory location is not user accessible, then call exit(-1)
  * Otherwise return filesys_remove with the given file name
@@ -488,45 +464,50 @@ static bool remove (char *file){
 	return filesys_remove(file);
 }
 
-// LAB2 IMPLEMENTATION
-// Function for allocating new fid to an open file
-static int alloc_fid(void){
-	int fid = 2; // initial value of fd is 2 which means no file can have a fd less than 2
-	while(findFdElem(fid)!=NULL){
-		fid++;	 // we search for files in the list with the given fid
-	}
-	return fid;  // we search for files in the list with the given fid
+/* Function for allocating new fid to an open file.
+ * Initial value of fd is 2 which means no file can have
+ * a fd less than 2.Now we search for files in the list
+ * with the given fid.
+ * */
+static int alloc_fid(void)
+{
+	int fid = 2;
+	while(findFdElem(fid)!=NULL)
+		fid++;
+	return fid;
 }
 
-// LAB2 IMPLEMENTATION
-// Function for finding the file in a fd list given a fd
-static struct file * findFile (int fd) {
+/* Function for finding the file in a fd list given a fd.
+ * Starts by finding the fd element in the list for the given fd
+ * and returns the file associated with it.
+ * */
+static struct file * findFile (int fd)
+{
 	struct fd_elements *ret;
-	ret = findFdElem (fd);   // find the fd element in the list for the given fd
+	ret = findFdElem (fd);
 	if (!ret)
 		return NULL;
-	return ret->File;		 // return the file associated with it
+	return ret->File;
 }
 
-
-// function for finding the fd element in the fd list given a fd
-static struct fd_elements *findFdElem (int fd) {
+/* Function for finding the fd element in the fd list given a fd.
+ * Scans the list and compare the fd of the element in the list
+ * with the fd given and in case it maches, returns that fd element
+ * If there is no such fd element, return null.
+ * */
+static struct fd_elements *findFdElem (int fd)
+{
 	struct fd_elements *ret;
 	struct list_elem *l;
-	
-	// scan the list and compare the fd of the element in the list with the 
-	// fd given and in case it maches, return that fd element
-	for (l = list_begin (&fileList); l != list_end (&fileList); l = list_next (l)){
+	for (l = list_begin (&fileList); l != list_end (&fileList); l = list_next (l))
+	{
 		ret = list_entry (l, struct fd_elements, elem);
 		if (ret->fd == fd)
 			return ret;
 	}
-
-	// if there is no such fd element, return null
 	return NULL;
 }
 
-// LAB 2 IMPLEMENTATION
 /* This function finds the element for a given fd in in the list
  * of opened files for a given thread. It gets the current thread.
  * Scans the list and compare the fd of the element in the list with
@@ -547,41 +528,45 @@ static struct fd_elements *findFdElemProcess (int fd) {
 	return NULL;
 }
 
-/* Ckecking the address of strings
+/* This function has been used to check strings in
+ * open,exec,create,remove system calls
+ * Takes an index position of string and checks its
+ * range in the user address space page by page.
  * */
 static void string_check_terminate(char *str)
 {
 	  char* temp = str;
 	  unsigned ptr;
-	  while(*temp) // loop untill NULL is found
+	  while(*temp)
 	  {
     	for(ptr = (unsigned)temp; ptr < (unsigned)(temp+1);
-    		ptr = ptr + (PGSIZE - ptr % PGSIZE));  // jump to last entry of a page
+    		ptr = ptr + (PGSIZE - ptr % PGSIZE));
     	if(!is_user_vaddr((void *)ptr))
     		exit(-1);
 	    ++temp;
 	  }
 }
 
-/* Checking the address of buffer
+/* This function has been used to check the address of the buffer
+ * indices in read,write system call.It scans the address index of
+ * the buffer at page size offsets.It advances on the basis of buffer
+ * size.If the buffer size is zero then it terminates the loop. If the
+ * buffer size is greater than 1 page then it advances by decrementing
+ * buffer size by 1 page size.And if the size of buffer is less than 1
+ * page then it just jumps to the end of the buffer.
  * */
 static void buffer_check_terminate(void *buffer, unsigned size)
 {
 	unsigned buffer_size = size;
 	void *buffer_tmp ;
 	buffer_tmp= buffer;
-	/* Checking the given buffer*/
 	while(buffer_tmp != NULL)
 	{
-	      if (get_valid_val((int *)buffer_tmp)==-1)
+	      if (!is_user_vaddr(buffer_tmp) || buffer_tmp==NULL)
 		  exit (-1);
 
-	      /* Advance */
 	      if (buffer_size == 0)
-		  {
-			  /* Terminate loop*/
-			  buffer_tmp = NULL;
-		  }
+		    buffer_tmp = NULL;
 		  else if (buffer_size > PGSIZE)
 		  {
 			  buffer_tmp += PGSIZE;
@@ -589,7 +574,6 @@ static void buffer_check_terminate(void *buffer, unsigned size)
 		  }
 		  else
 		  {
-			  /* last loop */
 			  buffer_tmp = buffer + size - 1;
 			  buffer_size = 0;
 		  }
@@ -603,7 +587,6 @@ void terminate_process(void)
 	exit(-1);
 }
 
-// LAB 2 IMPLEMENTATION
 /* Verifies the addresses passed to it by checking if they are
  * not NULL as well as not lying in the kernel space above PHYS_BASE.
  * Then it uses get_user() to get the calue stored at the passed
@@ -616,7 +599,6 @@ get_valid_val(int *uaddr)
   return get_user(uaddr);
 }
  
-// LAB 2 IMPLEMENTATION
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
@@ -629,16 +611,3 @@ get_user (const int *uaddr)
        : "=&a" (result) : "m" (*uaddr));
   return result;
 }
-//==LAB 2 IMPLEMENTATION 
-// This function is not of any use now, but could be in the future labs. 
-/* Writes BYTE to user address UDST.
-   UDST must be below PHYS_BASE.
-   Returns true if successful, false if a segfault occurred. 
-static bool
-put_user (uint8_t *udst, uint8_t byte)
-{
-  int error_code;
-  asm ("movl $1f, %0; movb %b2, %1; 1:"
-       : "=&a" (error_code), "=m" (*udst) : "q" (byte));
-  return error_code != -1;
-}*/
