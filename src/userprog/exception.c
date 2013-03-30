@@ -9,6 +9,8 @@
 #include "userprog/syscall.h"
 #include "vm/page.h"
 #include "threads/vaddr.h"
+#include "vm/debug.h"
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -160,34 +162,53 @@ page_fault (struct intr_frame *f)
   	  case SEL_UCSEG:
   	  {
 	  /* checking for write violation, NULL address, address less than PHYSBASE */
-  		printf("User page fault\n");
-	    if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
+#ifdef DEBUG_EXCEPTION
+  		printf("User Page Fault Address:\n");
+#endif
+  		if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
 	    {
-	    	printf("User page fault:not present\n");
-	    	terminate_process();
+#ifdef DEBUG_EXCEPTION
+  			printf("Page Fault:Write Violation\n");
+#endif
+  			terminate_process();
 	    }
 	    /* Getting the right page from suppl. table of process. */
-	    page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
+	    //printf("pg_round_down:%d\n",pg_round_down(fault_addr));
 
+	    page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
+#ifdef DEBUG_EXCEPTION
+	    printf("Getting correct Entry Addr:%ld\n",(long)page_entry->uvaddr);
+#endif
 	    /* Load the page to filesystem,mmf or swap as needed*/
 	    if(page_entry!=NULL && !page_entry->is_page_loaded)
+	    {
+#ifdef DEBUG_EXCEPTION
+	    	printf("Load page as needed\n");
+#endif
 	    	load_supptable_page(page_entry);
+	    }
 	    /* Grow stack when the page is NULL and bounds of the stack is violated*/
-	    else if(page_entry==NULL && fault_addr>=(f->esp-32) && fault_addr<=(PHYS_BASE-STACK_SIZE))
+	    else if(page_entry==NULL && fault_addr>=(f->esp-32) && pg_round_down(fault_addr)>=(PHYS_BASE-STACK_SIZE))
+	    {
+#ifdef DEBUG_EXCEPTION
+	    	printf("Grow Stack\n");
+#endif
 	    	grow_stack(fault_addr);
+	    }
 	    else
 	     {
-	        if(!pagedir_get_page(t->pagedir, fault_addr))
+	    	if(!pagedir_get_page(t->pagedir, fault_addr))
 	        {
-	        	printf("page not set in pagedir");
-	        	terminate_process();
+	    		terminate_process();
 	        }
 	     }
   	  } break;
 
   	  case SEL_KCSEG:
   	  {
-  	     printf("Page fault in kernel");
+#ifdef DEBUG_EXCEPTION
+  		 printf("Page Fault:Kernel\n");
+#endif
   		 if (pagedir_get_page(t->pagedir, fault_addr)==NULL)
   	     {
   	    	 page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
@@ -199,5 +220,4 @@ page_fault (struct intr_frame *f)
   	     }
   	  } break;
   }
-  kill(f);
 }

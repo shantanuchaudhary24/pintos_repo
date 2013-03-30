@@ -11,6 +11,7 @@
 #include "lib/stdbool.h"
 #include "vm/swap.h"
 #include "vm/frame.h"
+#include "vm/debug.h"
 
 bool init_supptable(struct hash *table);
 bool supptable_add_page(struct hash *table,struct supptable_page *page_entry);
@@ -77,11 +78,23 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 	page_entry->zero_bytes=zero_bytes;
 	page_entry->writable=writable;
 	page_entry->is_page_loaded=false;
-	
+
+#ifdef DEBUG_PAGE
+	printf("supptable_add_file: ENTRY ADDR:%d\n",(int)page_entry->uvaddr);
+#endif
+
 	if(hash_insert(&t->suppl_page_table,&page_entry->hash_index)==NULL)
+	{
+#ifdef DEBUG_PAGE
+		printf("supptable_add_file:PAGE ADDED.\n");
+#endif
 		return true;
-	else {
-		printf("page_entry already exists in the table");		// Do something else
+	}
+	else
+	{
+#ifdef DEBUG_PAGE
+		printf("supptable_add_file:PAGE ALREADY EXISTS");		// Do something else
+#endif
 		return false;
 	}
 }
@@ -103,10 +116,15 @@ void write_page_to_file(struct supptable_page *page_entry)
  * */
 struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 {
+#ifdef DEBUG_PAGE
+	printf("get_supptable_page: VADDR:%ld\n",(long)vaddr);
+#endif
 	struct hash_elem *temp_hash_elem;
 	struct supptable_page page_entry;
+
 	page_entry.uvaddr=vaddr;
 	temp_hash_elem=hash_find(table,&page_entry.hash_index);
+
 	if(temp_hash_elem!=NULL)
 		return hash_entry(temp_hash_elem,struct supptable_page,hash_index);
 	else return NULL;	
@@ -167,6 +185,9 @@ bool load_supptable_page(struct supptable_page *page_entry)
 	switch(page_entry->page_type)
 	{
 		case FILE:
+#ifdef DEBUG_PAGE
+			printf("load_supptable_page:LOAD_PAGE_FILE\n");
+#endif
 			result=load_page_file(page_entry);
 			break;
 		case MMF:
@@ -174,6 +195,9 @@ bool load_supptable_page(struct supptable_page *page_entry)
 			PANIC("MMF not implemented");
 			break;
 		case SWAP:
+#ifdef DEBUG_PAGE
+			printf("load_supptable_page:LOAD_PAGE_SWAP");
+#endif
 			result=load_page_swap(page_entry);
 			break;
 	}
@@ -208,8 +232,7 @@ static bool load_page_swap(struct supptable_page *page_entry)
     if (page_entry->page_type == SWAP)
     	hash_delete (&t->suppl_page_table, &page_entry->hash_index);
 
-	// ???
-    if (page_entry->page_type == (FILE | SWAP))
+	if (page_entry->page_type == (FILE | SWAP))
 	{
 		page_entry->page_type = FILE;
 		page_entry->is_page_loaded = true;
@@ -231,9 +254,20 @@ static bool load_page_file(struct supptable_page *page_entry)
 	struct thread *t=thread_current();
 	file_seek (page_entry->file, page_entry->offset);
 
-	void *kpage = allocateFrame(PAL_USER,page_entry->uvaddr);
+#ifdef DEBUG_PAGE
+	printf("load_page_file:PAGE UVADDR:%ld\n",(long)page_entry->uvaddr);
+#endif
+
+	void *kpage;
+	kpage= allocateFrame(PAL_USER,page_entry->uvaddr);
 	if (kpage == NULL)
+	{
+
+#ifdef DEBUG_PAGE
+		printf("load_page_file:FRAME ALLOC. FAILED\n");
+#endif
 		return false;
+	}
 
 	if (file_read (page_entry->file, kpage,page_entry->read_bytes)!= (int)page_entry->read_bytes)
 	{
@@ -241,14 +275,17 @@ static bool load_page_file(struct supptable_page *page_entry)
 	    return false;
 	}
 
-	//??
 	memset(kpage + page_entry->read_bytes, 0,page_entry->zero_bytes);
 	if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->writable))
 	{
 		freeFrame (kpage);
-	    return false;
+		return false;
 	}
 	page_entry->is_page_loaded = true;
+
+#ifdef DEBUG_PAGE
+	printf("load_page_file:TRUE\n");
+#endif
 	return true;
 }
 

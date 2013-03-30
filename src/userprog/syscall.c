@@ -16,6 +16,7 @@
 #include "devices/input.h"
 #include "threads/synch.h"
 #include "userprog/pagedir.h"
+#include "vm/debug.h"
 
 // Structure for the elements in the file desciptor table
 struct fd_elements {
@@ -116,6 +117,8 @@ void syscall_init (void) {
  * */
 static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 {
+//	printf("In system call handler\n");
+
 	struct thread *t = thread_current();
 	int *p;
 	unsigned ret = 0;
@@ -637,7 +640,6 @@ static void buffer_check_terminate(void *buffer, unsigned size)
  * */
 void terminate_process(void)
 {
-	printf("Call to terminate process\n");
 	exit(-1);
 }
 

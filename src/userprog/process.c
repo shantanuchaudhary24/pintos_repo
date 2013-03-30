@@ -22,6 +22,8 @@
 #include "threads/malloc.h"
 #include "userprog/syscall.h"
 #include "vm/page.h"
+#include "vm/frame.h"
+#include "vm/debug.h"
 #define MAXARGS 32
 
 static thread_func start_process NO_RETURN;
@@ -108,7 +110,7 @@ start_process (void *file_name_)
 
   /* Initilise Supplementary Page Table*/
   init_supptable(&t->suppl_page_table);
-  printf("Initialised Supplementary table\n");
+//  printf("Initialised Supplementary table\n");
 
   /*
   initialize the variables argc to 0
@@ -136,7 +138,7 @@ start_process (void *file_name_)
   
   // load the file 
   success = load (file_name, &if_.eip, &if_.esp);
-  printf("Load ");
+//printf("Load ");
 
   /* If load failed, quit. */
   if(success) {
@@ -172,10 +174,10 @@ start_process (void *file_name_)
       intr_disable ();
       thread_block ();
       intr_enable ();
-      printf("Load Successful\n");
+//      printf("Load Successful\n");
   }
   else{
-	  printf("Load Failed\n");
+//	  printf("Load Failed\n");
 	  	free(argv_off);
 		exit:
 		t->ret_status = -1;
@@ -389,7 +391,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (file_name);
   if (file == NULL) 
     {
-	  printf("Filesystem failure");
+//	  printf("Filesystem failure");
 	  goto end;
     }
 
@@ -475,7 +477,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
  end:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
-  printf("Load success\n");
+//  printf("Load success\n");
   return success;
 }
 
@@ -543,7 +545,7 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
    or disk read error occurs. */
 static bool
 load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
+              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
   ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
   ASSERT (pg_ofs (upage) == 0);
@@ -572,7 +574,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
       memset (kpage + page_read_bytes, 0, page_zero_bytes);
 
       /* Add the page to the process's address space. */
-      if (!install_page (upage, kpage, writable)) 
+      if (!install_page(upage, kpage, writable))
         {
           palloc_free_page (kpage);
           return false; 
@@ -589,25 +591,25 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
-	printf("Lazy load segment enter\n");
 	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
 	ASSERT (pg_ofs (upage) == 0);
 	ASSERT (ofs % PGSIZE == 0);
+	file_seek(file,ofs);	//offset to read file from
 	while (read_bytes > 0 || zero_bytes > 0)
 	{
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
-        if(supptable_add_file(FILE,file,ofs,upage,read_bytes,zero_bytes,writable))
+        if(!supptable_add_file(FILE,file,ofs,upage,read_bytes,zero_bytes,writable))
         {
-        	printf("lazy load success\n");
-        	return true;
+//        	printf("lazy load fail\n");
+        	return false;
         }
         read_bytes-=page_read_bytes;
         zero_bytes-=page_zero_bytes;
         ofs+=page_read_bytes;
         upage+=PGSIZE;
 	}
-	return false;
+	return true;
 }
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
@@ -616,15 +618,15 @@ setup_stack (void **esp)
 {
   uint8_t *kpage;
   bool success = false;
-
-  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+//  printf("Stack allocating frame");
+  kpage = allocateFrame(PAL_USER | PAL_ZERO, *esp);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
         *esp = PHYS_BASE;
       else
-        palloc_free_page (kpage);
+        freeFrame(kpage);
     }
   return success;
 }
