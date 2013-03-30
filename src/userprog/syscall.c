@@ -93,6 +93,9 @@ static int get_valid_val(int *uaddr);
 static int get_user (const int *uaddr);
 void terminate_process(void);
 
+static mapid_t mmap (int, void *);
+static void munmap (mapid_t);
+
 
 void syscall_init (void) {
 	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -213,6 +216,20 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 				exit(-1);						  
 			ret = (unsigned)tell(arg1);
 			f->eax = ret; 
+			break;
+		case SYS_MMAP :
+			arg1 = get_valid_val(p+1);
+			arg2 = get_valid_val(p+2);
+			if(arg1==-1 || arg2 == -1)
+				exit(-1);
+			ret = (unsigned)mmap(arg1, (void *)arg2);
+			f->eax = ret;
+			break;
+		case SYS_MUNMAP:
+			arg1 = get_valid_val(p+1);
+			if(arg1==-1)
+				exit(-1);
+			munmap(arg1);
 			break;
 		default:
 			thread_exit();
@@ -475,6 +492,42 @@ static int alloc_fid(void)
 	while(findFdElem(fid)!=NULL)
 		fid++;
 	return fid;
+}
+
+static mapid_t mmap (int fd, void *addr)
+{
+	struct file *fileStruct;
+	struct file *reopenedFile;
+	struct thread *t = thread_current();
+	int length = 0;
+	int i = 0;
+	
+	if(fd < 2)
+		return -1;
+	
+	if(addr == NULL || addr = 0x0 || pg_ofs(addr) != 0)
+		return -1;
+		
+	if((fileStruct = findFile(fd)) == NULL)
+		return -1;
+	
+	if((length = file_length(fileStruct)) <= 0)
+		return -1;
+	
+	for(i = 0; i < offset; i+=PGSIZE)
+		if(get_supptable_page(&t->suppl_page_table, addr + i) || pagedir_get_page(t->pagedir, addr + i))
+			return -1;
+	lock_acquire(&fileLock);
+	reopenedFile = file_reopen(fileStruct);
+	lock_release(&fileLock);
+	
+	if(reopenedFile == NULL)
+		return -1;
+	// call insert mmfiles function (to be created in process.c)
+}
+
+static void munmap (mapid_t){
+	
 }
 
 /* Function for finding the file in a fd list given a fd.
