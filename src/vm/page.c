@@ -279,12 +279,15 @@ static bool load_page_mmf (struct supptable_page *spte) {
 
 	file_seek (spte->file, spte->offset);
 
-	uint8_t *kpage = allocateFrame (PAL_USER, spte->uvaddr);
-	if (kpage == NULL)
+	void *kpage = allocateFrame (PAL_USER, spte->uvaddr);
+	if (kpage == NULL){
+		DPRINTF_PAGE("Load Page MMF: false : couldn't allocate Frame\n");
 		return false;
+	}
 
 	if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes) {
 		freeFrame (kpage);
+		DPRINTF_PAGE("Load Page MMF: false : couldn't read file\n");
 		return false; 
     }
 	
@@ -292,13 +295,14 @@ static bool load_page_mmf (struct supptable_page *spte) {
 
 	if (!pagedir_set_page (cur->pagedir, spte->uvaddr, kpage, true)) {
 		freeFrame (kpage);
+		DPRINTF_PAGE("Load Page MMF: false : couldn't set pagedir entry\n");
 		return false; 
     }
-
+	// - ?
 	spte->is_page_loaded = true;
 	if (spte->page_type & SWAP)
 		spte->page_type = MMF;
-
+	DPRINTF_PAGE("Load Page MMF: true\n");
 	return true;
 }
 
