@@ -94,8 +94,8 @@ static int get_valid_val(int *uaddr);
 static int get_user (const int *uaddr);
 void terminate_process(void);
 
-static mapid_t mmap (int, void *);
-static void munmap (mapid_t);
+//static mapid_t mmap (int, void *);
+//static void munmap (mapid_t);
 
 
 void syscall_init (void) {
@@ -220,6 +220,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			ret = (unsigned)tell(arg1);
 			f->eax = ret; 
 			break;
+		/*
 		case SYS_MMAP :
 			arg1 = get_valid_val(p+1);
 			arg2 = get_valid_val(p+2);
@@ -234,6 +235,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 				exit(-1);
 			munmap(arg1);
 			break;
+		*/
 		default:
 			thread_exit();
 			break;
@@ -496,7 +498,7 @@ static int alloc_fid(void)
 		fid++;
 	return fid;
 }
-
+/*
 static mapid_t mmap (int fd, void *addr)
 {
 	struct file *fileStruct;
@@ -527,12 +529,12 @@ static mapid_t mmap (int fd, void *addr)
 	if(reopenedFile == NULL)
 		return -1;
 	// call insert mmfiles function (to be created in process.c)
-}
-
+}*/
+/*
 static void munmap (mapid_t){
 	
 }
-
+*/
 /* Function for finding the file in a fd list given a fd.
  * Starts by finding the fd element in the list for the given fd
  * and returns the file associated with it.

@@ -56,13 +56,12 @@ process_execute (const char *file_name)
 	}
   memcpy (fn_f, file_name, strlen (file_name) + 1);
   file_name = strtok_r (fn_f, " ", &save);
-  //printf("%s",file_name);
+
   /* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (file_name, PRI_DEFAULT, start_process, fn);
 	if (tid == TID_ERROR)
 		goto end;
   
-  // LAB2 IMPLEMENTATION
   // get thread for a given tid
 	t = get_thread_by_tid(tid);
 	
@@ -110,7 +109,6 @@ start_process (void *file_name_)
 
   /* Initilise Supplementary Page Table*/
   init_supptable(&t->suppl_page_table);
-//  printf("Initialised Supplementary table\n");
 
   /*
   initialize the variables argc to 0
@@ -240,8 +238,6 @@ process_wait (tid_t child_tid )
 end:
   t->ret_status = RET_STATUS_INVALID;
   return ret;
-  
-
 }
 
 /* Free the current process's resources. */

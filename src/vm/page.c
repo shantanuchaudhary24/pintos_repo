@@ -79,22 +79,16 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 	page_entry->writable=writable;
 	page_entry->is_page_loaded=false;
 
-#ifdef DEBUG_PAGE
-	printf("supptable_add_file: ENTRY ADDR:%d\n",(int)page_entry->uvaddr);
-#endif
+	DPRINT_PAGE("supptable_add_file: ENTRY ADDR:%d\n",(int)page_entry->uvaddr);
 
 	if(hash_insert(&t->suppl_page_table,&page_entry->hash_index)==NULL)
 	{
-#ifdef DEBUG_PAGE
-		printf("supptable_add_file:PAGE ADDED.\n");
-#endif
+		DPRINTF("supptable_add_file:PAGE ADDED.\n");
 		return true;
 	}
 	else
 	{
-#ifdef DEBUG_PAGE
-		printf("supptable_add_file:PAGE ALREADY EXISTS");		// Do something else
-#endif
+		DPRINTF("supptable_add_file:PAGE ALREADY EXISTS");
 		return false;
 	}
 }
@@ -116,9 +110,7 @@ void write_page_to_file(struct supptable_page *page_entry)
  * */
 struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 {
-#ifdef DEBUG_PAGE
-	printf("get_supptable_page: VADDR:%ld\n",(long)vaddr);
-#endif
+	DPRINT_PAGE("get_supptable_page: VADDR:%ld\n",(long)vaddr);
 	struct hash_elem *temp_hash_elem;
 	struct supptable_page page_entry;
 
@@ -127,7 +119,11 @@ struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 
 	if(temp_hash_elem!=NULL)
 		return hash_entry(temp_hash_elem,struct supptable_page,hash_index);
-	else return NULL;	
+	else
+	{
+		DPRINTF("get_supptable_page:Return NULL");
+		return NULL;
+	}
 }
 
 /* Destroys the supplementary table. When a thread exits this function is
@@ -185,9 +181,7 @@ bool load_supptable_page(struct supptable_page *page_entry)
 	switch(page_entry->page_type)
 	{
 		case FILE:
-#ifdef DEBUG_PAGE
-			printf("load_supptable_page:LOAD_PAGE_FILE\n");
-#endif
+			DPRINTF("load_supptable_page:LOAD_PAGE_FILE\n");
 			result=load_page_file(page_entry);
 			break;
 		case MMF:
@@ -195,9 +189,7 @@ bool load_supptable_page(struct supptable_page *page_entry)
 			PANIC("MMF not implemented");
 			break;
 		case SWAP:
-#ifdef DEBUG_PAGE
-			printf("load_supptable_page:LOAD_PAGE_SWAP");
-#endif
+			DPRINTF("load_supptable_page:LOAD_PAGE_SWAP");
 			result=load_page_swap(page_entry);
 			break;
 	}
@@ -254,18 +246,13 @@ static bool load_page_file(struct supptable_page *page_entry)
 	struct thread *t=thread_current();
 	file_seek (page_entry->file, page_entry->offset);
 
-#ifdef DEBUG_PAGE
-	printf("load_page_file:PAGE UVADDR:%ld\n",(long)page_entry->uvaddr);
-#endif
+	DPRINT_PAGE("load_page_file:PAGE UVADDR:%ld\n",(long)page_entry->uvaddr);
 
 	void *kpage;
 	kpage= allocateFrame(PAL_USER,page_entry->uvaddr);
 	if (kpage == NULL)
 	{
-
-#ifdef DEBUG_PAGE
-		printf("load_page_file:FRAME ALLOC. FAILED\n");
-#endif
+		DPRINTF("load_page_file:FRAME ALLOC. FAILED\n");
 		return false;
 	}
 
@@ -282,10 +269,7 @@ static bool load_page_file(struct supptable_page *page_entry)
 		return false;
 	}
 	page_entry->is_page_loaded = true;
-
-#ifdef DEBUG_PAGE
-	printf("load_page_file:TRUE\n");
-#endif
+	DPRINTF("load_page_file:TRUE\n");
 	return true;
 }
 
