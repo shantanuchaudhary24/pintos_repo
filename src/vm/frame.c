@@ -37,7 +37,7 @@ void *allocateFrame(enum palloc_flags FLAG, void *page)
 	// allocate a new page from user pool
 	if((FLAG & PAL_USER))
 	{
-		DPRINTF("allocateFrame:alloc new frame\n");
+		DPRINTF_FRAME("allocateFrame:alloc new frame\n");
 
 		if((FLAG & PAL_ZERO))
 		{
@@ -52,7 +52,7 @@ void *allocateFrame(enum palloc_flags FLAG, void *page)
 	// if can't allocate a new page from user pool, try evicting one from the frameTable
 	if(new_frame == NULL)
 	{
-		DPRINTF("allocateFrame:Eviction\n");
+		DPRINTF_FRAME("allocateFrame:Eviction\n");
 		// depending upon the implementation of evictFrame() we will
 		// need to update the frameStruct->page of the Frame Table Entry
 		// corresponding to the new_frame
@@ -181,7 +181,7 @@ static bool addFrameToTable(void *frame, void *page)
 	list_push_back(&frameTable, &newFrameEntry->listElement);
 	lock_release(&frameTableLock);
 
-	DPRINTF("addFrameToTable:Frame Added\n");
+	DPRINTF_FRAME("addFrameToTable:Frame Added\n");
 	return true;
 }
 

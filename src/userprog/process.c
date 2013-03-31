@@ -382,7 +382,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (file_name);
   if (file == NULL) 
     {
-	  DPRINTF("load:FILE IS NULL\n");
+	  DPRINTF_PROC("load:FILE IS NULL\n");
 	  goto end;
     }
 
@@ -533,7 +533,7 @@ static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
         if(!supptable_add_file(FILE,file,ofs,upage,read_bytes,zero_bytes,writable))
         {
-        	DPRINTF("lazy_load_segment:SUPP_TABLE ADD FAIL\n");
+        	DPRINTF_PROC("lazy_load_segment:SUPP_TABLE ADD FAIL\n");
         	return false;
         }
         read_bytes-=page_read_bytes;
@@ -550,7 +550,7 @@ setup_stack (void **esp)
 {
   uint8_t *kpage;
   bool success = false;
-  DPRINTF("setup_stack");
+  DPRINTF_PROC("setup_stack");
   kpage = allocateFrame(PAL_USER | PAL_ZERO, *esp);
   if (kpage != NULL) 
     {

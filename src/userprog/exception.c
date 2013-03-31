@@ -167,7 +167,7 @@ page_fault (struct intr_frame *f)
 
 		if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
 	    {
-			DPRINTF("page_fault:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
+			DPRINTF_EXCEP("page_fault:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
 			terminate_process();
 	    }
 
@@ -179,19 +179,19 @@ page_fault (struct intr_frame *f)
 	    if(page_entry!=NULL && !page_entry->is_page_loaded)
 	    {
 
-	    	DPRINTF("page_fault:LOAD PAGE\n");
+	    	DPRINTF_EXCEP("page_fault:LOAD PAGE\n");
 			load_supptable_page(page_entry);
 	    }
 	    /* Grow stack when the page is NULL and bounds of the stack is violated*/
 	    else if(page_entry==NULL && fault_addr>=(f->esp-32) && pg_round_down(fault_addr)>=(PHYS_BASE-STACK_SIZE))
 	    {
 
-	    	DPRINTF("GROW STACK\n");
+	    	DPRINTF_EXCEP("GROW STACK\n");
 	    	grow_stack(fault_addr);
 	    }
 	    else
 	     {
-	    	DPRINTF("page_fault:PAGE UNMAPPED\n");
+	    	DPRINTF_EXCEP("page_fault:PAGE UNMAPPED\n");
 	    	if(pagedir_get_page(t->pagedir, fault_addr)==NULL)
 	    		terminate_process();
 	     }
@@ -203,7 +203,7 @@ page_fault (struct intr_frame *f)
   		DPRINT_EXCEP("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
 		if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
 		{
-			DPRINTF("page_fault:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
+			DPRINTF_EXCEP("page_fault:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
 			terminate_process();
 		}
 
@@ -217,7 +217,7 @@ page_fault (struct intr_frame *f)
   	  	{
   	    	if(pagedir_get_page(t->pagedir, fault_addr)==NULL)
   	    	{
-  	    		DPRINTF("page_fault:PAGE UNMAPPED\n");
+  	    		DPRINTF_EXCEP("page_fault:PAGE UNMAPPED\n");
   	    		terminate_process();
   	    	}
   	  	}

@@ -84,12 +84,12 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 
 	if(hash_insert(&t->suppl_page_table,&page_entry->hash_index)==NULL)
 	{
-		DPRINTF("supptable_add_file:PAGE ADDED.\n");
+		DPRINTF_PAGE("supptable_add_file:PAGE ADDED.\n");
 		return true;
 	}
 	else
 	{
-		DPRINTF("supptable_add_file:PAGE ALREADY EXISTS");
+		DPRINTF_PAGE("supptable_add_file:PAGE ALREADY EXISTS");
 		return false;
 	}
 }
@@ -122,7 +122,7 @@ struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 		return hash_entry(temp_hash_elem,struct supptable_page,hash_index);
 	else
 	{
-		DPRINTF("get_supptable_page:NULL RETURN");
+		DPRINTF_PAGE("get_supptable_page:NULL RETURN");
 		return NULL;
 	}
 }
@@ -182,7 +182,7 @@ bool load_supptable_page(struct supptable_page *page_entry)
 	switch(page_entry->page_type)
 	{
 		case FILE:
-			DPRINTF("load_supptable_page:LOAD_PAGE_FILE\n");
+			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_FILE\n");
 			result=load_page_file(page_entry);
 			break;
 		case MMF:
@@ -190,7 +190,7 @@ bool load_supptable_page(struct supptable_page *page_entry)
 //			PANIC("MMF not implemented");
 			break;
 		case SWAP:
-			DPRINTF("load_supptable_page:LOAD_PAGE_SWAP");
+			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_SWAP");
 			result=load_page_swap(page_entry);
 			break;
 	}
@@ -253,7 +253,7 @@ static bool load_page_file(struct supptable_page *page_entry)
 	kpage= allocateFrame(PAL_USER,page_entry->uvaddr);
 	if (kpage == NULL)
 	{
-		DPRINTF("load_page_file:FRAME ALLOC. FAILED\n");
+		DPRINTF_PAGE("load_page_file:FRAME ALLOC. FAILED\n");
 		return false;
 	}
 
@@ -270,7 +270,7 @@ static bool load_page_file(struct supptable_page *page_entry)
 		return false;
 	}
 	page_entry->is_page_loaded = true;
-	DPRINTF("load_page_file:TRUE\n");
+	DPRINTF_PAGE("load_page_file:TRUE\n");
 	return true;
 }
 
