@@ -79,7 +79,7 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 	page_entry->writable=writable;
 	page_entry->is_page_loaded=false;
 
-	DPRINT_PAGE("supptable_add_file: ENTRY ADDR:%d\n",(int)page_entry->uvaddr);
+	DPRINT_PAGE("supptable_add_file: ENTRY ADDR:%x\n",(uint32_t)(page_entry->uvaddr));
 
 	if(hash_insert(&t->suppl_page_table,&page_entry->hash_index)==NULL)
 	{
@@ -110,7 +110,7 @@ void write_page_to_file(struct supptable_page *page_entry)
  * */
 struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 {
-	DPRINT_PAGE("get_supptable_page: VADDR:%ld\n",(long)vaddr);
+	DPRINT_PAGE("get_supptable_page: VADDR:%x\n",(uint32_t)vaddr);
 	struct hash_elem *temp_hash_elem;
 	struct supptable_page page_entry;
 
@@ -121,7 +121,7 @@ struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 		return hash_entry(temp_hash_elem,struct supptable_page,hash_index);
 	else
 	{
-		DPRINTF("get_supptable_page:Return NULL");
+		DPRINTF("get_supptable_page:NULL RETURN");
 		return NULL;
 	}
 }

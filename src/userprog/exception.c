@@ -163,34 +163,35 @@ page_fault (struct intr_frame *f)
   	  case SEL_UCSEG:
   	  {
 	  /* checking for write violation, NULL address, address less than PHYSBASE */
-		 DPRINTF("page_fault:User Page Fault\n");
+		 DPRINT_EXCEP("page_fault:USER fault_addr:%x\n",(uint32_t)fault_addr);
 
 		if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
 	    {
-			DPRINTF("page_fault:Write Violation\n");
+			DPRINTF("page_fault:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
 			terminate_process();
 	    }
 
   		/* Get page info from supplementary table*/
 	    page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
-		DPRINT_EXCEP("page_fault:Getting correct Entry Addr:%ld\n",(long)page_entry->uvaddr);
+		DPRINT_EXCEP("page_fault:Getting correct Entry Addr:%x\n",(uint32_t)page_entry->uvaddr);
 
 	    /* Load the page to filesystem,mmf or swap as needed*/
 	    if(page_entry!=NULL && !page_entry->is_page_loaded)
 	    {
 
-	    	DPRINTF("page_fault:Load as needed\n");
+	    	DPRINTF("page_fault:LOAD PAGE\n");
 			load_supptable_page(page_entry);
 	    }
 	    /* Grow stack when the page is NULL and bounds of the stack is violated*/
 	    else if(page_entry==NULL && fault_addr>=(f->esp-32) && pg_round_down(fault_addr)>=(PHYS_BASE-STACK_SIZE))
 	    {
 
-	    	DPRINTF("Grow Stack\n");
+	    	DPRINTF("GROW STACK\n");
 	    	grow_stack(fault_addr);
 	    }
 	    else
 	     {
+	    	DPRINTF("page_fault:PAGE UNMAPPED\n");
 	    	if(pagedir_get_page(t->pagedir, fault_addr)==NULL)
 	    		terminate_process();
 	     }
@@ -199,9 +200,12 @@ page_fault (struct intr_frame *f)
   	  case SEL_KCSEG:
   	  {
 
-  		DPRINTF("page_fault:Kernel\n");
+  		DPRINT_EXCEP("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
 		if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
-  			terminate_process();
+		{
+			DPRINTF("page_fault:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
+			terminate_process();
+		}
 
   		page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
 
@@ -212,7 +216,10 @@ page_fault (struct intr_frame *f)
   	    else
   	  	{
   	    	if(pagedir_get_page(t->pagedir, fault_addr)==NULL)
+  	    	{
+  	    		DPRINTF("page_fault:PAGE UNMAPPED\n");
   	    		terminate_process();
+  	    	}
   	  	}
   	   } break;
   	}

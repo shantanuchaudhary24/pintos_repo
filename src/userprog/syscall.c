@@ -117,8 +117,6 @@ void syscall_init (void) {
  * */
 static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 {
-//	printf("In system call handler\n");
-
 	struct thread *t = thread_current();
 	int *p;
 	unsigned ret = 0;
@@ -131,15 +129,18 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 		exit(-1);
 	switch(*p){
 		case SYS_HALT :
+			DPRINTF("SYS_HALT\n");
 			halt();					  
 			break;
 		case SYS_CLOSE : 
+			DPRINTF("SYS_CLOSE\n");
 			arg1=get_valid_val((p + 1));
 			if (arg1==(-1))
 				exit(-1);						  
 			close(arg1); 
 			break;
 		case SYS_CREATE : 
+			DPRINTF("SYS_CREATE\n");
 			arg1=get_valid_val(p+1);
 			arg2=get_valid_val(p+2);
 			if (arg1==(-1) || arg2==(-1))
@@ -148,6 +149,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			f->eax = ret; 
 				break;
 		case SYS_EXEC : 
+			DPRINTF("SYS_EXEC\n");
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -155,12 +157,14 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			f->eax = ret; 
 			break;
 		case SYS_EXIT : 
+			DPRINTF("SYS_EXIT\n");
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
 			exit(arg1);
 			break;
 		case SYS_FILESIZE : 
+			DPRINTF("SYS_FILESIZE\n");
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -168,6 +172,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			f->eax = ret; 
 			break;
 		case SYS_OPEN : 
+			DPRINTF("SYS_OPEN\n");
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -175,6 +180,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			f->eax = ret; 
 			break;
 		case SYS_WAIT :
+			DPRINTF("SYS_WAIT\n");
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -182,6 +188,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			f->eax = ret; 
 			break;
 		case SYS_REMOVE : 
+			DPRINTF("SYS_REMOVE\n");
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -189,6 +196,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			f->eax = ret; 
 			break;
 		case SYS_READ :
+			DPRINTF("SYS_READ\n");
 			arg1=get_valid_val(p+1);
 			arg2=get_valid_val(p+2);
 			arg3=get_valid_val(p+3);
@@ -198,6 +206,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			f->eax = ret; 
 			break;
 		case SYS_WRITE : 
+			DPRINTF("SYS_WRITE\n");
 			arg1=get_valid_val(p+1);
 			arg2=get_valid_val(p+2);
 			arg3=get_valid_val(p+3);
@@ -207,6 +216,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			f->eax = ret; 
 			break;
 		case SYS_SEEK :  
+			DPRINTF("SYS_SEEK\n");
 			arg1=get_valid_val(p+1);
 			arg2=get_valid_val(p+2);
 			if (arg1==(-1) || arg2==(-1))
@@ -214,6 +224,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			seek(arg1, (unsigned)arg2);
 			break; 
 		case SYS_TELL :  
+			DPRINTF("SYS_TELL\n");
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
 				exit(-1);						  
@@ -642,6 +653,7 @@ static void buffer_check_terminate(void *buffer, unsigned size)
  * */
 void terminate_process(void)
 {
+	DPRINTF("TERMINATE_PROCESS");
 	exit(-1);
 }
 

@@ -136,7 +136,6 @@ start_process (void *file_name_)
   
   // load the file 
   success = load (file_name, &if_.eip, &if_.esp);
-//printf("Load ");
 
   /* If load failed, quit. */
   if(success) {
@@ -172,10 +171,8 @@ start_process (void *file_name_)
       intr_disable ();
       thread_block ();
       intr_enable ();
-//      printf("Load Successful\n");
-  }
+ }
   else{
-//	  printf("Load Failed\n");
 	  	free(argv_off);
 		exit:
 		t->ret_status = -1;
@@ -184,7 +181,7 @@ start_process (void *file_name_)
 		thread_block ();
 		intr_enable ();
 		thread_exit ();
-  }
+}
   
   // free the variable argv_off
   free(argv_off);
@@ -202,7 +199,6 @@ start_process (void *file_name_)
   NOT_REACHED ();
 }
 
-// LAB 2 IMPLEMENTATION
 /* Waits for thread TID to die and returns its exit status.  If
    it was terminated by the kernel (i.e. killed due to an
    exception), returns -1.  If TID is invalid or if it was not a
@@ -358,9 +354,6 @@ struct Elf32_Phdr
 
 static bool setup_stack (void **esp);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
-static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
-                          uint32_t read_bytes, uint32_t zero_bytes,
-                          bool writable);
 static bool install_page (void *upage, void *kpage, bool writable);
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
@@ -387,7 +380,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   file = filesys_open (file_name);
   if (file == NULL) 
     {
-//	  printf("Filesystem failure");
+	  DPRINTF("load:FILE IS NULL\n");
 	  goto end;
     }
 
@@ -431,30 +424,30 @@ load (const char *file_name, void (**eip) (void), void **esp)
           goto end;
         case PT_LOAD:
           if (validate_segment (&phdr, file)) 
-            {
+          {
               bool writable = (phdr.p_flags & PF_W) != 0;
               uint32_t file_page = phdr.p_offset & ~PGMASK;
               uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
               uint32_t page_offset = phdr.p_vaddr & PGMASK;
               uint32_t read_bytes, zero_bytes;
               if (phdr.p_filesz > 0)
-                {
+              {
                   /* Normal segment.
                      Read initial part from disk and zero the rest. */
                   read_bytes = page_offset + phdr.p_filesz;
                   zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
                                 - read_bytes);
-                }
+              }
               else 
-                {
+              {
                   /* Entirely zero.
                      Don't read anything from disk. */
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
-                }
+              }
               if (!lazy_load_segment (file, file_page, (void *) mem_page,read_bytes, zero_bytes, writable))
                 goto end;
-            }
+          }
           else
             goto end;
           break;
@@ -473,7 +466,6 @@ load (const char *file_name, void (**eip) (void), void **esp)
  end:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
-//  printf("Load success\n");
   return success;
 }
 
@@ -525,64 +517,6 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
   return true;
 }
 
-/* Loads a segment starting at offset OFS in FILE at address
-   UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
-   memory are initialized, as follows:
-
-        - READ_BYTES bytes at UPAGE must be read from FILE
-          starting at offset OFS.
-
-        - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
-
-   The pages initialized by this function must be writable by the
-   user process if WRITABLE is true, read-only otherwise.
-
-   Return true if successful, false if a memory allocation error
-   or disk read error occurs. */
-static bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
-{
-  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-  ASSERT (pg_ofs (upage) == 0);
-  ASSERT (ofs % PGSIZE == 0);
-
-  file_seek (file, ofs);
-  while (read_bytes > 0 || zero_bytes > 0) 
-    {
-      /* Calculate how to fill this page.
-         We will read PAGE_READ_BYTES bytes from FILE
-         and zero the final PAGE_ZERO_BYTES bytes. */
-      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-      size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-      /* Get a page of memory. */
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
-        return false;
-
-      /* Load this page. */
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      /* Add the page to the process's address space. */
-      if (!install_page(upage, kpage, writable))
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-
-      /* Advance. */
-      read_bytes -= page_read_bytes;
-      zero_bytes -= page_zero_bytes;
-      upage += PGSIZE;
-    }
-  return true;
-}
 
 static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable)
@@ -597,7 +531,7 @@ static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
         if(!supptable_add_file(FILE,file,ofs,upage,read_bytes,zero_bytes,writable))
         {
-//        	printf("lazy load fail\n");
+        	DPRINTF("lazy_load_segment:SUPP_TABLE ADD FAIL\n");
         	return false;
         }
         read_bytes-=page_read_bytes;
@@ -614,7 +548,7 @@ setup_stack (void **esp)
 {
   uint8_t *kpage;
   bool success = false;
-//  printf("Stack allocating frame");
+  DPRINTF("setup_stack");
   kpage = allocateFrame(PAL_USER | PAL_ZERO, *esp);
   if (kpage != NULL) 
     {
