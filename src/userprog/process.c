@@ -8,6 +8,7 @@
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
+#include "userprog/mmf.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -15,15 +16,15 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
-#include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "lib/string.h"
 #include "lib/stdio.h"
 #include "threads/malloc.h"
-#include "userprog/syscall.h"
 #include "vm/page.h"
 #include "vm/frame.h"
 #include "vm/debug.h"
+
+
 #define MAXARGS 32
 
 static thread_func start_process NO_RETURN;
@@ -109,7 +110,7 @@ start_process (void *file_name_)
 
   /* Initilise Supplementary Page Table*/
   init_supptable(&t->suppl_page_table);
-
+  mmfiles_init(&t->mmfiles);
   /*
   initialize the variables argc to 0
   */
@@ -254,7 +255,8 @@ process_exit (void)
       thread_block ();
       intr_enable ();
     }
-    
+  free_mmfiles(&cur->mmfiles);
+  
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
   pd = cur->pagedir;

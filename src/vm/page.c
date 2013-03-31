@@ -24,6 +24,7 @@ bool load_supptable_page(struct supptable_page *page_entry);
 
 static bool load_page_swap(struct supptable_page *page_entry);
 static bool load_page_file(struct supptable_page *page_entry);
+static bool load_page_mmf (struct supptable_page *spte);
 static void supptable_free_page(struct hash_elem *element, void *aux UNUSED);
 static unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less (const struct hash_elem *a_, const struct hash_elem *b_,void *aux UNUSED);
@@ -185,8 +186,8 @@ bool load_supptable_page(struct supptable_page *page_entry)
 			result=load_page_file(page_entry);
 			break;
 		case MMF:
-			//result=load_page_mmf(page_entry);
-			PANIC("MMF not implemented");
+			result=load_page_mmf(page_entry);
+//			PANIC("MMF not implemented");
 			break;
 		case SWAP:
 			DPRINTF("load_supptable_page:LOAD_PAGE_SWAP");
@@ -272,6 +273,39 @@ static bool load_page_file(struct supptable_page *page_entry)
 	DPRINTF("load_page_file:TRUE\n");
 	return true;
 }
+
+static bool load_page_mmf (struct supptable_page *spte) {
+  struct thread *cur = thread_current ();
+
+  file_seek (spte->file, spte->offset);
+
+  /* Get a page of memory. */
+  uint8_t *kpage = allocateFrame (PAL_USER, spte->uvaddr);
+  if (kpage == NULL)
+    return false;
+
+  /* Load this page. */
+  if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
+    {
+      freeFrame (kpage);
+      return false; 
+    }
+  memset (kpage + spte->read_bytes, 0, PGSIZE - spte->read_bytes);
+
+  /* Add the page to the process's address space. */
+  if (!pagedir_set_page (cur->pagedir, spte->uvaddr, kpage, true)) 
+    {
+      freeFrame (kpage);
+      return false; 
+    }
+
+  spte->is_page_loaded = true;
+  if (spte->page_type & SWAP)
+    spte->page_type = MMF;
+
+  return true;
+}
+
 
 /* Auxiliary Functions for hashing */
 /* Returns a hash value for page p. */

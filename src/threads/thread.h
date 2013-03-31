@@ -113,6 +113,10 @@ struct thread
 
     /* Supplementary Table (Per Process)*/
     struct hash suppl_page_table;
+    
+    /*memory mapping*/
+    struct hash mmfiles;
+    mapid_t mapid_allocator;
 };
 
 /* If false (default), use round-robin scheduler.

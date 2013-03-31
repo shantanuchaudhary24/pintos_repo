@@ -126,6 +126,7 @@ main (void)
 #ifdef USERPROG
   exception_init ();
   syscall_init ();
+  frameInit();
 #endif
   /* Start thread scheduler and enable interrupts. */
   frameInit();				// Virtual Memory Frame Initialization

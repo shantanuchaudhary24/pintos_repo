@@ -1,4 +1,4 @@
-#include "userprog/syscall.h"
+#include "userprog/mmf.h"
 //14406
 #include <stdio.h>
 #include <syscall-nr.h>				// reference to library to get interrupt numbers
@@ -17,6 +17,7 @@
 #include "threads/synch.h"
 #include "userprog/pagedir.h"
 #include "vm/debug.h"
+#include "vm/page.h"
 
 // Structure for the elements in the file desciptor table
 struct fd_elements {
@@ -28,10 +29,6 @@ struct fd_elements {
 
 // Variable declaration for list of opened files (fd table)
 static struct list fileList; 
-
-// Variable file lock used for locking files during read/write system call
-static struct lock fileLock;
-
 
 // function for finding a file from the fd table given a fd
 static struct file *findFile (int fd);
@@ -97,7 +94,6 @@ void terminate_process(void);
 //static mapid_t mmap (int, void *);
 //static void munmap (mapid_t);
 
-
 void syscall_init (void) {
 	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 
@@ -106,6 +102,7 @@ void syscall_init (void) {
 
 	//initializing the file lock list
 	lock_init(&fileLock);
+	
 }
 
 // System call handler
@@ -125,7 +122,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 	t->stack = f->esp ;				/* Saving stack pointer (needed to handle kernel page fault) */
 	if (get_valid_val (p)== -1)
 		exit(-1);
-	if (*p < SYS_HALT || *p > SYS_CLOSE)
+	if (*p < SYS_HALT || *p > SYS_MUNMAP)
 		exit(-1);
 	switch(*p){
 		case SYS_HALT :
@@ -521,7 +518,7 @@ static mapid_t mmap (int fd, void *addr)
 	if(fd < 2)
 		return -1;
 	
-	if(addr == NULL || addr = 0x0 || pg_ofs(addr) != 0)
+	if(addr == NULL || addr == 0x0 || pg_ofs(addr) != 0)
 		return -1;
 		
 	if((fileStruct = findFile(fd)) == NULL)
@@ -530,7 +527,7 @@ static mapid_t mmap (int fd, void *addr)
 	if((length = file_length(fileStruct)) <= 0)
 		return -1;
 	
-	for(i = 0; i < offset; i+=PGSIZE)
+	for(i = 0; i < length; i+=PGSIZE)
 		if(get_supptable_page(&t->suppl_page_table, addr + i) || pagedir_get_page(t->pagedir, addr + i))
 			return -1;
 	lock_acquire(&fileLock);
@@ -540,10 +537,13 @@ static mapid_t mmap (int fd, void *addr)
 	if(reopenedFile == NULL)
 		return -1;
 	// call insert mmfiles function (to be created in process.c)
-}*/
-/*
-static void munmap (mapid_t){
-	
+	mapid_t x = mmfiles_insert(addr, reopenedFile, length);
+	printf("Completed System Call Map");
+	return x;
+}
+
+static void munmap (mapid_t mapping){
+	mmfiles_remove (mapping);
 }
 */
 /* Function for finding the file in a fd list given a fd.

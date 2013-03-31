@@ -67,6 +67,9 @@ void *allocateFrame(enum palloc_flags FLAG, void *page)
 	else
 	{
 		// if allocation of a new page succeeded, add this new frame to the frameTable
+#ifdef DEBUG_FRAME
+		printf("Adding new Frame to the Frame Table\n");
+#endif
 		if(!addFrameToTable(new_frame, page))
 			PANIC("Can't add Frame Struct to the Frame Table");
 	}
@@ -161,11 +164,11 @@ static bool saveEvictedFrame(struct frameStruct *frame){
 static bool addFrameToTable(void *frame, void *page)
 {
 	struct frameStruct *newFrameEntry;
-	newFrameEntry=getFrameFromTable(frame);
-	if(newFrameEntry!=NULL)
-	{
-		freeFrame(newFrameEntry);
-	}
+//	newFrameEntry = getFrameFromTable(frame);
+	
+//	if(newFrameEntry!=NULL)
+//		removeFrameFromTable(newFrameEntry);
+	
 	newFrameEntry = calloc (1, sizeof(*newFrameEntry));
 	if(newFrameEntry == NULL)
 		return false;
