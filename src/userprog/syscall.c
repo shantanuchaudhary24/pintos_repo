@@ -160,7 +160,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			DPRINTF_SYS("SYS_EXIT\n");
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
-				exit(-1);						  
+				exit(-1);					  
 			exit(arg1);
 			break;
 		case SYS_FILESIZE : 
@@ -262,6 +262,7 @@ return;
 static void exit(int status){
 	struct thread *t;
 	struct list_elem *l;
+	DPRINTF_SYS("exit : begin\n");
 	t = thread_current ();   
 	while(!list_empty(&t->files))
 	{
@@ -270,6 +271,7 @@ static void exit(int status){
 	}
 	t->ret_status = status;
 	thread_exit ();
+	DPRINTF_SYS("exit : end\n");
 	return;
 }
 
@@ -381,10 +383,11 @@ static pid_t exec (char *cmd_line){
 		return ret;
 
 	string_check_terminate(cmd_line);
-
+	DPRINTF_SYS("exec : string_check_terminate completed\n");
 	lock_acquire(&fileLock);
 	ret = process_execute(cmd_line);
 	lock_release(&fileLock);
+	DPRINTF_SYS("exec : process_execute completed\n");
 	return ret;
 }
 
@@ -392,8 +395,10 @@ static pid_t exec (char *cmd_line){
  * else return call process_wait with this pid
  * */
 static int wait (pid_t pid){
-	if(!get_thread_by_tid(pid))
+	if(!get_thread_by_tid(pid)){
+		DPRINTF_SYS("wait : exit(-1)\n");
 		exit(-1);
+	}
 	return process_wait(pid);
 }
 
@@ -618,8 +623,10 @@ static void string_check_terminate(char *str)
 	  {
     	for(ptr = (unsigned)temp; ptr < (unsigned)(temp+1);
     		ptr = ptr + (PGSIZE - ptr % PGSIZE));
-    	if(!is_user_vaddr((void *)ptr))
+    	if(!is_user_vaddr((void *)ptr)){
+			DPRINTF_SYS("string_check_terminate: exit(-1)");
     		exit(-1);
+    	}
 	    ++temp;
 	  }
 }
@@ -638,23 +645,22 @@ static void buffer_check_terminate(void *buffer, unsigned size)
 	unsigned buffer_size = size;
 	void *buffer_tmp ;
 	buffer_tmp= buffer;
-	while(buffer_tmp != NULL)
-	{
-	      if (!is_user_vaddr(buffer_tmp) || buffer_tmp==NULL)
-		  exit (-1);
+	while(buffer_tmp != NULL) {
+		if (!is_user_vaddr(buffer_tmp) || buffer_tmp==NULL){
+			DPRINTF_SYS("buffer_check_terminate: exit(-1)");
+			exit (-1);
+		}
 
-	      if (buffer_size == 0)
-		    buffer_tmp = NULL;
-		  else if (buffer_size > PGSIZE)
-		  {
-			  buffer_tmp += PGSIZE;
-			  buffer_size -= PGSIZE;
-		  }
-		  else
-		  {
-			  buffer_tmp = buffer + size - 1;
-			  buffer_size = 0;
-		  }
+		if (buffer_size == 0)
+			buffer_tmp = NULL;
+		else if (buffer_size > PGSIZE) {
+			buffer_tmp += PGSIZE;
+			buffer_size -= PGSIZE;
+		}
+		else {
+			buffer_tmp = buffer + size - 1;
+			buffer_size = 0;
+		}
 	}
 }
 

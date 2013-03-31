@@ -212,7 +212,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid ) 
 {
-  
+  DPRINTF_PROC("process_wait : begin\n");
   struct thread *t;
   int ret;
   
@@ -234,6 +234,7 @@ process_wait (tid_t child_tid )
   
 end:
   t->ret_status = RET_STATUS_INVALID;
+  DPRINTF_PROC("process_wait : end\n");
   return ret;
 }
 
@@ -550,7 +551,7 @@ setup_stack (void **esp)
 {
   uint8_t *kpage;
   bool success = false;
-  DPRINTF_PROC("setup_stack");
+  DPRINTF_PROC("setup_stack\n");
   kpage = allocateFrame(PAL_USER | PAL_ZERO, *esp);
   if (kpage != NULL) 
     {
