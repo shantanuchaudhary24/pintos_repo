@@ -3,6 +3,7 @@
 #include "threads/malloc.h"
 #include "threads/pte.h"
 #include "vm/debug.h"
+#include "userprog/pagedir.h"
 
 static void free_mmfiles_entry (struct hash_elem *e, void *aux UNUSED);
 

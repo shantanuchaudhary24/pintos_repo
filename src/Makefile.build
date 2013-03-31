@@ -65,12 +65,12 @@ userprog_SRC += userprog/exception.c	# User exception handler.
 userprog_SRC += userprog/syscall.c	# System call handler.
 userprog_SRC += userprog/gdt.c		# GDT initialization.
 userprog_SRC += userprog/tss.c		# TSS management.
-userprog_SRC += userprog/mmf.c		# Mempry Mapping.
+userprog_SRC += userprog/mmf.c		# Memory Mapped Files management.
 
 # Virtual Memory code.
 vm_SRC = vm/page.c					# Supplmentary page table.
 vm_SRC += vm/swap.c					# Swap Space manipulation.
-vm_SRC += vm/frame.c				# Frame Table for Virtual Memory
+vm_SRC += vm/frame.c					# Frame Table for Virtual Memory
 
 # Filesystem code.
 filesys_SRC  = filesys/filesys.c	# Filesystem core.
