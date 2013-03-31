@@ -91,8 +91,8 @@ static int get_valid_val(int *uaddr);
 static int get_user (const int *uaddr);
 void terminate_process(void);
 
-//static mapid_t mmap (int, void *);
-//static void munmap (mapid_t);
+static mapid_t mmap (int, void *);
+static void munmap (mapid_t);
 
 void syscall_init (void) {
 	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -228,8 +228,8 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			ret = (unsigned)tell(arg1);
 			f->eax = ret; 
 			break;
-		/*
 		case SYS_MMAP :
+			DPRINTF_SYS("SYS_MMAP\n");
 			arg1 = get_valid_val(p+1);
 			arg2 = get_valid_val(p+2);
 			if(arg1==-1 || arg2 == -1)
@@ -238,12 +238,12 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			f->eax = ret;
 			break;
 		case SYS_MUNMAP:
+			DPRINTF_SYS("SYS_MUNMAP\n");
 			arg1 = get_valid_val(p+1);
 			if(arg1==-1)
 				exit(-1);
 			munmap(arg1);
 			break;
-		*/
 		default:
 			thread_exit();
 			break;
@@ -506,9 +506,10 @@ static int alloc_fid(void)
 		fid++;
 	return fid;
 }
-/*
+
 static mapid_t mmap (int fd, void *addr)
 {
+	DPRINTF_SYS("entered syscall mmap\n");
 	struct file *fileStruct;
 	struct file *reopenedFile;
 	struct thread *t = thread_current();
@@ -538,14 +539,16 @@ static mapid_t mmap (int fd, void *addr)
 		return -1;
 	// call insert mmfiles function (to be created in process.c)
 	mapid_t x = mmfiles_insert(addr, reopenedFile, length);
-	printf("Completed System Call Map");
+	DPRINTF_SYS("Completed System Call Map\n");
 	return x;
 }
 
 static void munmap (mapid_t mapping){
+	DPRINTF_SYS("In Syscall MUNMAP");
 	mmfiles_remove (mapping);
+	DPRINTF_SYS("Completed Syscall MUNMAP");
 }
-*/
+
 /* Function for finding the file in a fd list given a fd.
  * Starts by finding the fd element in the list for the given fd
  * and returns the file associated with it.
