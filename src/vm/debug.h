@@ -3,7 +3,7 @@
 //#define DEBUG_SWAP
 //#define DEBUG_FRAME
 //#define DEBUG_PROCESS
-#define DEBUG_SYSCALL
+//#define DEBUG_SYSCALL
 
 #ifndef DEBUG_EXCEPTION
 	#define DPRINT_EXCEP(str,arg)

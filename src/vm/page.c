@@ -275,35 +275,31 @@ static bool load_page_file(struct supptable_page *page_entry)
 }
 
 static bool load_page_mmf (struct supptable_page *spte) {
-  struct thread *cur = thread_current ();
+	struct thread *cur = thread_current ();
 
-  file_seek (spte->file, spte->offset);
+	file_seek (spte->file, spte->offset);
 
-  /* Get a page of memory. */
-  uint8_t *kpage = allocateFrame (PAL_USER, spte->uvaddr);
-  if (kpage == NULL)
-    return false;
+	uint8_t *kpage = allocateFrame (PAL_USER, spte->uvaddr);
+	if (kpage == NULL)
+		return false;
 
-  /* Load this page. */
-  if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes)
-    {
-      freeFrame (kpage);
-      return false; 
+	if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes) {
+		freeFrame (kpage);
+		return false; 
     }
-  memset (kpage + spte->read_bytes, 0, PGSIZE - spte->read_bytes);
+	
+	memset (kpage + spte->read_bytes, 0, PGSIZE - spte->read_bytes);
 
-  /* Add the page to the process's address space. */
-  if (!pagedir_set_page (cur->pagedir, spte->uvaddr, kpage, true)) 
-    {
-      freeFrame (kpage);
-      return false; 
+	if (!pagedir_set_page (cur->pagedir, spte->uvaddr, kpage, true)) {
+		freeFrame (kpage);
+		return false; 
     }
 
-  spte->is_page_loaded = true;
-  if (spte->page_type & SWAP)
-    spte->page_type = MMF;
+	spte->is_page_loaded = true;
+	if (spte->page_type & SWAP)
+		spte->page_type = MMF;
 
-  return true;
+	return true;
 }
 
 
