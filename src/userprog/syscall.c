@@ -84,8 +84,13 @@ static bool remove (char *file);
 // function for handling the exit system call
 static void exit (int status);
 
-// functions for handling the user memory access
-static void string_check_terminate(char *str);
+// functions for checking the user memory access,strings,buffer address
+static void string_check_terminate(char* str);
+static void user_add_range_check_and_terminate(char* start, int size);
+int user_add_range_check(char* start, int size);
+static int is_valid_address(void* add);
+
+
 static void buffer_check_terminate(void *buffer, unsigned size);
 static int get_valid_val(int *uaddr);
 static int get_user (const int *uaddr);
@@ -381,7 +386,7 @@ static pid_t exec (char *cmd_line){
 	int ret = -1;
 	if (!cmd_line)
 		return ret;
-
+	DPRINT_SYS("exec:%s\n",cmd_line);
 	string_check_terminate(cmd_line);
 	DPRINTF_SYS("exec : string_check_terminate completed\n");
 	lock_acquire(&fileLock);
@@ -608,29 +613,6 @@ static struct fd_elements *findFdElemProcess (int fd) {
 	return NULL;
 }
 
-/* This function has been used to check strings in
- * open,exec,create,remove system calls
- * Takes an index position of string and checks its
- * range in the user address space page by page.
- * */
-static void string_check_terminate(char *str)
-{
-	  DPRINT_SYS("string_check_terminate:%s\n",str);
-	  char* temp ;
-	  temp=str;
-	  unsigned ptr;
-	  while(*temp)
-	  {
-    	for(ptr = (unsigned)temp; ptr < (unsigned)(temp+1);
-    		ptr = ptr + (PGSIZE - ptr % PGSIZE));
-    	if(!is_user_vaddr((void *)ptr)){
-			DPRINTF_SYS("string_check_terminate: exit(-1)");
-    		exit(-1);
-    	}
-	    ++temp;
-	  }
-}
-
 /* This function has been used to check the address of the buffer
  * indices in read,write system call.It scans the address index of
  * the buffer at page size offsets.It advances on the basis of buffer
@@ -664,11 +646,64 @@ static void buffer_check_terminate(void *buffer, unsigned size)
 	}
 }
 
+/* Checks the validity of the string
+ * terminates the process is address is invalid
+ * */
+void string_check_terminate(char* str)
+{
+  printf("String check terminate.\n");
+	char* tmp = str;
+  user_add_range_check_and_terminate(tmp, 1);
+  while(*tmp) 									// loop untill NULL is found
+  {
+    ++tmp;
+    user_add_range_check_and_terminate(tmp, 1); // check and terminate
+  }
+}
+
+/* Helping function for string_check_terminate
+ * Responsible for termination
+ * */
+void user_add_range_check_and_terminate(char* start, int size)
+{
+  if(!user_add_range_check(start, size))
+  {
+    terminate_process();
+  }
+}
+
+/* Helping function for above function
+ * responsible for traversing the string address references
+ * */
+int user_add_range_check(char* start, int size)
+{
+  unsigned ptr;
+
+  for(ptr = (unsigned)start; ptr < (unsigned)(start+size);
+      ptr = ptr + (PGSIZE - ptr % PGSIZE))  // jump to last entry of a page
+    if(!is_valid_address((void*)ptr))
+      return 0;
+
+  return 1;
+}
+
+/* Checks that address should not be NULL
+ * and below PHYS_BASE
+ * */
+int is_valid_address(void* add)
+{
+  if(!add)
+    return 0;
+  if(add >= (void*)PHYS_BASE)
+    return 0;
+  return 1;
+}
+
 /* Function to kill the current thread
  * */
 void terminate_process(void)
 {
-	DPRINTF_SYS("TERMINATE_PROCESS");
+	DPRINTF_SYS("TERMINATE_PROCESS\n");
 	exit(-1);
 }
 
