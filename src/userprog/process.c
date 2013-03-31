@@ -89,6 +89,7 @@ end:
 static void
 start_process (void *file_name_)
 {
+  DPRINTF_PROC("start_process:ENTER\n");
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -139,9 +140,13 @@ start_process (void *file_name_)
   success = load (file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  if(success) {
+  if(success)
+  {
+	  //lock_acquire(&fileLock);
 	  t->self = filesys_open(file_name);
 	  file_deny_write (t->self);
+	  //lock_release(&fileLock);
+
       // load the file_name (all the arguments) on the stack.
       if_.esp -= file_name_len + 1;
       start = if_.esp;
@@ -173,7 +178,8 @@ start_process (void *file_name_)
       thread_block ();
       intr_enable ();
  }
-  else{
+  else
+  {
 	  	free(argv_off);
 		exit:
 		t->ret_status = -1;
@@ -182,7 +188,7 @@ start_process (void *file_name_)
 		thread_block ();
 		intr_enable ();
 		thread_exit ();
-}
+  }
   
   // free the variable argv_off
   free(argv_off);
@@ -195,7 +201,7 @@ start_process (void *file_name_)
      and jump to it. */
 
   // push all the arguments on the stack in the given format and then intialize the stack pointer
-  
+  DPRINTF_PROC("start_process:END\n");
   asm volatile ("movl %0, %%esp; jmp intr_exit" : : "g" (&if_) : "memory");
   NOT_REACHED ();
 }
@@ -363,113 +369,108 @@ static bool install_page (void *upage, void *kpage, bool writable);
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
    Returns true if successful, false otherwise. */
-bool
-load (const char *file_name, void (**eip) (void), void **esp) 
+bool load (const char *file_name, void (**eip) (void), void **esp)
 {
-  struct thread *t = thread_current ();
-  struct Elf32_Ehdr ehdr;
-  struct file *file = NULL;
-  off_t file_ofs;
-  bool success = false;
-  int i;
+	struct thread *t = thread_current ();
+	struct Elf32_Ehdr ehdr;
+	struct file *file = NULL;
+	off_t file_ofs;
+	bool success = false;
+	int i;
 
-  /* Allocate and activate page directory. */
-  t->pagedir = pagedir_create ();
-  if (t->pagedir == NULL) 
-    goto end;
-  process_activate ();
+	/* Allocate and activate page directory. */
+	t->pagedir = pagedir_create ();
+	if (t->pagedir == NULL)
+		goto end;
+	process_activate ();
 
-  /* Open executable file. */
-  file = filesys_open (file_name);
-  if (file == NULL) 
+	/* Open executable file. */
+  	file = filesys_open (file_name);
+    if (file == NULL)
     {
-	  DPRINTF_PROC("load:FILE IS NULL\n");
-	  goto end;
+    	DPRINTF_PROC("load:FILE IS NULL\n");
+    	goto end;
     }
 
-  /* Read and verify executable header. */
-  if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
+    /* Read and verify executable header. */
+    if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
       || ehdr.e_type != 2
       || ehdr.e_machine != 3
       || ehdr.e_version != 1
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
+    		goto end;
+
+    /* Read program headers. */
+    file_ofs = ehdr.e_phoff;
+    for (i = 0; i < ehdr.e_phnum; i++)
     {
-      goto end; 
-    }
+    	struct Elf32_Phdr phdr;
+    	if (file_ofs < 0 || file_ofs > file_length (file))
+    		goto end;
+    	file_seek (file, file_ofs);
 
-  /* Read program headers. */
-  file_ofs = ehdr.e_phoff;
-  for (i = 0; i < ehdr.e_phnum; i++) 
-    {
-      struct Elf32_Phdr phdr;
-
-      if (file_ofs < 0 || file_ofs > file_length (file))
-        goto end;
-      file_seek (file, file_ofs);
-
-      if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
-        goto end;
-      file_ofs += sizeof phdr;
-      switch (phdr.p_type) 
+    	if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
+    		goto end;
+    	file_ofs += sizeof phdr;
+    	switch (phdr.p_type)
         {
-        case PT_NULL:
-        case PT_NOTE:
-        case PT_PHDR:
-        case PT_STACK:
-        default:
-          /* Ignore this segment. */
-          break;
-        case PT_DYNAMIC:
-        case PT_INTERP:
-        case PT_SHLIB:
-          goto end;
-        case PT_LOAD:
-          if (validate_segment (&phdr, file)) 
-          {
-              bool writable = (phdr.p_flags & PF_W) != 0;
-              uint32_t file_page = phdr.p_offset & ~PGMASK;
-              uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
-              uint32_t page_offset = phdr.p_vaddr & PGMASK;
-              uint32_t read_bytes, zero_bytes;
-              if (phdr.p_filesz > 0)
-              {
-                  /* Normal segment.
-                     Read initial part from disk and zero the rest. */
-                  read_bytes = page_offset + phdr.p_filesz;
-                  zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)
-                                - read_bytes);
-              }
-              else 
-              {
-                  /* Entirely zero.
-                     Don't read anything from disk. */
-                  read_bytes = 0;
-                  zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
-              }
-              if (!lazy_load_segment (file, file_page, (void *) mem_page,read_bytes, zero_bytes, writable))
-                goto end;
-          }
-          else
-            goto end;
-          break;
+        	case PT_NULL:
+        	case PT_NOTE:
+        	case PT_PHDR:
+        	case PT_STACK:
+        	default:
+        		/* Ignore this segment. */
+        		break;
+        	case PT_DYNAMIC:
+        	case PT_INTERP:
+        	case PT_SHLIB:
+        		goto end;
+        	case PT_LOAD:
+        		if (validate_segment (&phdr, file))
+        		{
+        			bool writable = (phdr.p_flags & PF_W) != 0;
+        			uint32_t file_page = phdr.p_offset & ~PGMASK;
+        			uint32_t mem_page = phdr.p_vaddr & ~PGMASK;
+        			uint32_t page_offset = phdr.p_vaddr & PGMASK;
+        			uint32_t read_bytes, zero_bytes;
+        			if (phdr.p_filesz > 0)
+        			{
+        				/* Normal segment.
+                     	 Read initial part from disk and zero the rest. */
+        				read_bytes = page_offset + phdr.p_filesz;
+        				zero_bytes = (ROUND_UP (page_offset + phdr.p_memsz, PGSIZE)- read_bytes);
+        			}
+        			else
+        			{
+        				/* Entirely zero.
+                    	Don't read anything from disk. */
+        				read_bytes = 0;
+        				zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
+        			}
+
+        			if (!lazy_load_segment (file, file_page, (void *) mem_page,read_bytes, zero_bytes, writable))
+        			goto end;
+        		}
+        		else
+        			goto end;
+        		break;
         }
-    }
+  }
 
-  /* Set up stack. */
-  if (!setup_stack (esp))
-    goto end;
+    /* Set up stack. */
+    if (!setup_stack (esp))
+    	goto end;
 
-  /* Start address. */
-  *eip = (void (*) (void)) ehdr.e_entry;
+    /* Start address. */
+    *eip = (void (*) (void)) ehdr.e_entry;
+    success = true;
 
-  success = true;
-
- end:
-  /* We arrive here whether the load is successful or not. */
-  file_close (file);
-  return success;
+    end:
+    /* We arrive here whether the load is successful or not. */
+    file_close (file);
+    return success;
 }
 
 /* load() helpers. */
@@ -542,6 +543,7 @@ static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
         ofs+=page_read_bytes;
         upage+=PGSIZE;
 	}
+	DPRINTF_PROC("lazy_load_segment:SUPP_TABLE ADD SUCCESS\n");
 	return true;
 }
 /* Create a minimal stack by mapping a zeroed page at the top of
@@ -551,16 +553,22 @@ setup_stack (void **esp)
 {
   uint8_t *kpage;
   bool success = false;
-  DPRINTF_PROC("setup_stack\n");
+  DPRINTF_PROC("setup_stacks:ENTER\n");
   kpage = allocateFrame(PAL_USER | PAL_ZERO, *esp);
   if (kpage != NULL) 
-    {
-      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+  {
+	  success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+      {
+    	  DPRINTF_PROC("setup_stacks:SUCCESS\n");
+    	  *esp = PHYS_BASE;
+      }
       else
-        freeFrame(kpage);
-    }
+      {
+    	  DPRINTF_PROC("setup_stacks:FAIL\n");
+    	  freeFrame(kpage);
+      }
+  }
   return success;
 }
 

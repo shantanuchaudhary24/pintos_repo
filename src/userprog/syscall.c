@@ -388,7 +388,6 @@ static pid_t exec (char *cmd_line){
 		return ret;
 	DPRINT_SYS("exec:%s\n",cmd_line);
 	string_check_terminate(cmd_line);
-	DPRINTF_SYS("exec : string_check_terminate completed\n");
 	lock_acquire(&fileLock);
 	ret = process_execute(cmd_line);
 	lock_release(&fileLock);
@@ -651,14 +650,14 @@ static void buffer_check_terminate(void *buffer, unsigned size)
  * */
 void string_check_terminate(char* str)
 {
-  printf("String check terminate.\n");
-	char* tmp = str;
+  char* tmp = str;
   user_add_range_check_and_terminate(tmp, 1);
   while(*tmp) 									// loop untill NULL is found
   {
     ++tmp;
     user_add_range_check_and_terminate(tmp, 1); // check and terminate
   }
+  DPRINTF_SYS("string_check:SUCCESS\n");
 }
 
 /* Helping function for string_check_terminate
