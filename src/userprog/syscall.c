@@ -149,7 +149,10 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			DPRINTF_SYS("SYS_EXEC\n");
 			arg1=get_valid_val(p+1);
 			if (arg1==(-1))
+			{
+				DPRINTF_SYS("SYS_EXEC:INVALID ACCESS");
 				exit(-1);						  
+			}
 			ret = (unsigned)exec((char*)arg1);
 			f->eax = ret; 
 			break;
@@ -607,7 +610,9 @@ static struct fd_elements *findFdElemProcess (int fd) {
  * */
 static void string_check_terminate(char *str)
 {
-	  char* temp = str;
+	  DPRINT_SYS("string_check_terminate:%s\n",str);
+	  char* temp ;
+	  temp=str;
 	  unsigned ptr;
 	  while(*temp)
 	  {
@@ -629,6 +634,7 @@ static void string_check_terminate(char *str)
  * */
 static void buffer_check_terminate(void *buffer, unsigned size)
 {
+	DPRINTF_SYS("buffer_check_terminate:\n");
 	unsigned buffer_size = size;
 	void *buffer_tmp ;
 	buffer_tmp= buffer;

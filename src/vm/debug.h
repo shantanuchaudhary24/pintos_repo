@@ -30,7 +30,7 @@
 	#define DPRINTF_SWAP(str) printf(str)
 #endif
 #ifndef DEBUG_SWAP
-	#define DPRINT_SWAP(str,arg,type)
+	#define DPRINT_SWAP(str,arg)
 	#define DPRINTF_SWAP(str)
 #endif
 
@@ -40,7 +40,7 @@
 	#define DPRINTF_FRAME(str) printf(str)
 #endif
 #ifndef DEBUG_FRAME
-	#define DPRINT_FRAME(str,arg,type)
+	#define DPRINT_FRAME(str,arg)
 	#define DPRINTF_FRAME(str)
 #endif
 
@@ -49,7 +49,7 @@
 	#define DPRINTF_PROC(str) printf(str)
 #endif
 #ifndef DEBUG_PROCESS
-	#define DPRINT_PROC(str,arg,type)
+	#define DPRINT_PROC(str,arg)
 	#define DPRINTF_PROC(str)
 #endif
 
@@ -58,7 +58,7 @@
 	#define DPRINTF_SYS(str) printf(str)
 #endif
 #ifndef DEBUG_SYSCALL
-	#define DPRINT_SYS(str,arg,type)
+	#define DPRINT_SYS(str,arg)
 	#define DPRINTF_SYS(str)
 #endif
 

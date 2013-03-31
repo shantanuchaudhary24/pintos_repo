@@ -164,10 +164,10 @@ static bool saveEvictedFrame(struct frameStruct *frame){
 static bool addFrameToTable(void *frame, void *page)
 {
 	struct frameStruct *newFrameEntry;
-//	newFrameEntry = getFrameFromTable(frame);
+	newFrameEntry = getFrameFromTable(frame);
 	
-//	if(newFrameEntry!=NULL)
-//		removeFrameFromTable(newFrameEntry);
+	if(newFrameEntry!=NULL)
+		removeFrameFromTable(newFrameEntry);
 	
 	newFrameEntry = calloc (1, sizeof(*newFrameEntry));
 	if(newFrameEntry == NULL)

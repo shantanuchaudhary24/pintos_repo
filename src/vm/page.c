@@ -24,7 +24,7 @@ bool load_supptable_page(struct supptable_page *page_entry);
 
 static bool load_page_swap(struct supptable_page *page_entry);
 static bool load_page_file(struct supptable_page *page_entry);
-static bool load_page_mmf (struct supptable_page *spte);
+static bool load_page_mmf (struct supptable_page *page_entry);
 static void supptable_free_page(struct hash_elem *element, void *aux UNUSED);
 static unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less (const struct hash_elem *a_, const struct hash_elem *b_,void *aux UNUSED);
@@ -186,8 +186,8 @@ bool load_supptable_page(struct supptable_page *page_entry)
 			result=load_page_file(page_entry);
 			break;
 		case MMF:
+			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_MMF\n");
 			result=load_page_mmf(page_entry);
-//			PANIC("MMF not implemented");
 			break;
 		case SWAP:
 			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_SWAP");
@@ -274,34 +274,44 @@ static bool load_page_file(struct supptable_page *page_entry)
 	return true;
 }
 
-static bool load_page_mmf (struct supptable_page *spte) {
+/* Extension of load_supptable_page function to load a memory
+ * mapped file into the memory frame table.Allocates a frame
+ * based upon the page type.Frees the frame if the page read.
+ * It then loads the file from
+ * disk into the memory page table.It then zeroes out the suppl
+ * page read_bytes. Then it ,adds the page to the process's address
+ * space. If the load is successful this function returns true
+ * else returns false.
+ * */
+static bool load_page_mmf (struct supptable_page *page_entry)
+{
 	struct thread *cur = thread_current ();
 
-	file_seek (spte->file, spte->offset);
+	file_seek (page_entry->file, page_entry->offset);
 
-	void *kpage = allocateFrame (PAL_USER, spte->uvaddr);
+	void *kpage = allocateFrame (PAL_USER, page_entry->uvaddr);
 	if (kpage == NULL){
 		DPRINTF_PAGE("Load Page MMF: false : couldn't allocate Frame\n");
 		return false;
 	}
 
-	if (file_read (spte->file, kpage, spte->read_bytes) != (int) spte->read_bytes) {
+	if (file_read (page_entry->file, kpage, page_entry->read_bytes) != (int) page_entry->read_bytes) {
 		freeFrame (kpage);
 		DPRINTF_PAGE("Load Page MMF: false : couldn't read file\n");
 		return false; 
     }
 	
-	memset (kpage + spte->read_bytes, 0, PGSIZE - spte->read_bytes);
+	memset (kpage + page_entry->read_bytes, 0, PGSIZE - page_entry->read_bytes);
 
-	if (!pagedir_set_page (cur->pagedir, spte->uvaddr, kpage, true)) {
+	if (!pagedir_set_page (cur->pagedir, page_entry->uvaddr, kpage, true)) {
 		freeFrame (kpage);
 		DPRINTF_PAGE("Load Page MMF: false : couldn't set pagedir entry\n");
 		return false; 
     }
 	// - ?
-	spte->is_page_loaded = true;
-	if (spte->page_type & SWAP)
-		spte->page_type = MMF;
+	page_entry->is_page_loaded = true;
+	if (page_entry->page_type & SWAP)
+		page_entry->page_type = MMF;
 	DPRINTF_PAGE("Load Page MMF: true\n");
 	return true;
 }
