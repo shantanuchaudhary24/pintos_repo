@@ -3,7 +3,8 @@
 //#define DEBUG_SWAP
 //#define DEBUG_FRAME
 //#define DEBUG_PROCESS
-#define DEBUG_SYSCALL
+//#define DEBUG_MMF
+//#define DEBUG_SYSCALL
 
 #ifndef DEBUG_EXCEPTION
 	#define DPRINT_EXCEP(str,arg)
@@ -59,4 +60,13 @@
 #ifndef DEBUG_SYSCALL
 	#define DPRINT_SYS(str,arg,type)
 	#define DPRINTF_SYS(str)
+#endif
+
+#ifdef DEBUG_MMF
+	#define DPRINT_MMF(str,arg) printf(str,arg)
+	#define DPRINTF_MMF(str) printf(str)
+#endif
+#ifndef DEBUG_MMF
+	#define DPRINT_MMF(str,arg)
+	#define DPRINTF_MMF(str)
 #endif

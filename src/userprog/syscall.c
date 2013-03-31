@@ -544,9 +544,9 @@ static mapid_t mmap (int fd, void *addr)
 }
 
 static void munmap (mapid_t mapping){
-	DPRINTF_SYS("In Syscall MUNMAP");
+	DPRINTF_SYS("In Syscall MUNMAP\n");
 	mmfiles_remove (mapping);
-	DPRINTF_SYS("Completed Syscall MUNMAP");
+	DPRINTF_SYS("Completed Syscall MUNMAP\n");
 }
 
 /* Function for finding the file in a fd list given a fd.

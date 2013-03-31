@@ -2,6 +2,7 @@
 #include "vm/page.h"
 #include "threads/malloc.h"
 #include "threads/pte.h"
+#include "vm/debug.h"
 
 static void free_mmfiles_entry (struct hash_elem *e, void *aux UNUSED);
 
@@ -39,7 +40,7 @@ void mmfiles_remove (mapid_t mapid) {
 	struct mmfStruct mmf;
 	struct mmfStruct *mmf_ptr;
 	struct hash_elem *hashElement;
-
+	DPRINTF_MMF("in mmfiles_remove\n");
 	mmf.mapid = mapid;
 	hashElement = hash_delete (&t->mmfiles, &mmf.Element);
 	if (hashElement != NULL){
@@ -55,7 +56,7 @@ void mmfiles_free_entry (struct mmfStruct* mmfile){
 	struct supptable_page spte;
 	struct supptable_page *spte_ptr;
 	uint32_t i = 0;
-	
+	DPRINTF_MMF("in mmfiles_free_entry: begin\n");
 	for(i = 0; i < mmfile->pageCount; i++){
 		spte.uvaddr = mmfile->begin_addr + i*PGSIZE;
 		hashElement = hash_delete (&t->suppl_page_table, &spte.hash_index);
@@ -72,13 +73,12 @@ void mmfiles_free_entry (struct mmfStruct* mmfile){
 			free (spte_ptr);
 		}
 	}
-	
+	DPRINTF_MMF("in mmfiles_free_entry: before close file\n");
 	lock_acquire (&fileLock);
 	file_close (mmfile->file);
 	lock_release (&fileLock);
 
 	free (mmfile);
-	free (hashElement);
 }
 
 unsigned mmfile_hash (const struct hash_elem *a, void *aux UNUSED) {
