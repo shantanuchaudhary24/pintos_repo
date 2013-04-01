@@ -92,6 +92,7 @@ kill (struct intr_frame *f)
     case SEL_UCSEG:
       /* User's code segment, so it's a user exception, as we
          expected.  Kill the user process.  */
+    	DPRINTF_EXCEP("kill:PROCESS KILLED\n");
     	terminate_process();
     	break;
 
@@ -101,9 +102,11 @@ kill (struct intr_frame *f)
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
-        intr_dump_frame (f);
-        PANIC ("Kernel bug - unexpected interrupt in kernel");
-        break;
+    	f->eip=(void *)f->eax;
+    	f->eax=(-1);
+    	//intr_dump_frame(f);
+    	//PANIC("Kernel bug-unexpected interrupt in kernel");
+    	break;
     }
     default:
       /* Some other code segment?  Shouldn't happen.  Panic the
@@ -143,7 +146,7 @@ page_fault (struct intr_frame *f)
 {
   bool not_present;  /* True: not-present page, false: writing r/o page. */
   bool write;        /* True: access was write, false: access was read. */
-  bool user;         /* True: access by user, false: access by kernel. */
+  bool user UNUSED;  /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
   struct thread *t=thread_current();
   struct supptable_page *page_entry;
@@ -157,70 +160,94 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
-  
+
+  	  	  	  	  	  	  	 /*  PAGE FAULT HANDLING*/
+
   switch(f->cs)
   {
-  	  case SEL_UCSEG:
+  	  /* For user stack segment, we check for write violation,NULL address, address
+  	   * less than PHYSBASE.If there is any violation, we terminate the process.Next
+  	   * we consult the supplementary page table to fetch the appropriate page
+  	   * corresponding to the fault address.We load the entry corresponding to the
+  	   * page(depending upon swap,file,mmf as needed).Otherwise we check for read/write
+  	   * access and check if stack needs to be grown.In the final case we set the page
+  	   * in the page directory or terminate if it fails.
+  	   * */
+	  case SEL_UCSEG:
   	  {
-	  /* checking for write violation, NULL address, address less than PHYSBASE */
-		 DPRINT_EXCEP("page_fault:USER fault_addr:%x\n",(uint32_t)fault_addr);
+  		  DPRINT_EXCEP("page_fault:USER fault_addr:%x\n",(uint32_t)fault_addr);
 
-		if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
-	    {
-			DPRINTF_EXCEP("page_fault:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
-			terminate_process();
-	    }
+  		  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
+  		  {
+  			  DPRINTF_EXCEP("page_fault:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
+  			  terminate_process();
+  		  }
 
-  		/* Get page info from supplementary table*/
-	    page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
-		DPRINT_EXCEP("page_fault:Getting correct Entry Addr:%x\n",(uint32_t)page_entry->uvaddr);
+  		  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
+  		  DPRINT_EXCEP("page_fault:Getting correct Entry Addr:%x\n",(uint32_t)page_entry->uvaddr);
 
-	    /* Load the page to filesystem,mmf or swap as needed*/
-	    if(page_entry!=NULL && !page_entry->is_page_loaded)
-	    {
-
-	    	DPRINTF_EXCEP("page_fault:LOAD PAGE\n");
-			load_supptable_page(page_entry);
-	    }
-	    /* Grow stack when the page is NULL and bounds of the stack is violated*/
-	    else if(page_entry==NULL && fault_addr>=(f->esp-32) && pg_round_down(fault_addr)>=(PHYS_BASE-STACK_SIZE))
-	    {
-
-	    	DPRINTF_EXCEP("GROW STACK\n");
-	    	grow_stack(fault_addr);
-	    }
-	    else
-	     {
-	    	DPRINTF_EXCEP("page_fault:PAGE UNMAPPED\n");
-	    	if(pagedir_get_page(t->pagedir, fault_addr)==NULL)
-	    		terminate_process();
-	     }
+  		  if(page_entry!=NULL && !page_entry->is_page_loaded)
+  		  {
+  			  DPRINTF_EXCEP("page_fault:LOAD PAGE\n");
+  			  load_supptable_page(page_entry);
+  		  }
+  		  else if(page_entry==NULL && (int *)fault_addr>=(int *)(f->esp)-8 && pg_round_down(fault_addr)>=(PHYS_BASE-STACK_SIZE) && write)
+  		  {
+  			  DPRINTF_EXCEP("page_fault:GROW STACK\n");
+  			  grow_stack(fault_addr);
+  		  }
+  		  else
+  		  {
+  			  DPRINTF_EXCEP("page_fault:PAGE UNMAPPED\n");
+  			  if(pagedir_get_page(t->pagedir, fault_addr)==NULL)
+  				  terminate_process();
+  		  }
   	  } break;
 
-  	  case SEL_KCSEG:
+  	  /* For kernel stack segment, we check for write violation,NULL address, address
+  	   * less than PHYSBASE and saved stack pointer is in valid user virtual address space.
+  	   * If there is any violation, we terminate the process.Next
+  	   * we consult the supplementary page table to fetch the appropriate page
+  	   * corresponding to the fault address.We load the entry corresponding to the
+  	   * page(depending upon swap,file,mmf as needed).Otherwise we check for read/write
+  	   * access and check if stack needs to be grown(using the saved stack pointer).In
+  	   * the final case we set the page in the page directory or terminate if it fails.
+  	   * */
+	  case SEL_KCSEG:
   	  {
+  		  DPRINT_EXCEP("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
+  		  if(!is_user_vaddr(t->stack) || !not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
+  		  {
+  			  DPRINTF_EXCEP("page_fault:WRITE VIOLATION/NULL/INVALID_USER_VADDR\n");
+  			  terminate_process();
+  		  }
 
-  		DPRINT_EXCEP("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
-		if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
-		{
-			DPRINTF_EXCEP("page_fault:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
-			terminate_process();
-		}
+  		  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
 
-  		page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
-
-  		if(page_entry!=NULL && !page_entry->is_page_loaded)
-  	    	load_supptable_page(page_entry);
-  	    else if(page_entry == NULL && fault_addr >= (void *)(t->stack-32))
-  	    		grow_stack(fault_addr);
-  	    else
-  	  	{
-  	    	if(pagedir_get_page(t->pagedir, fault_addr)==NULL)
-  	    	{
-  	    		DPRINTF_EXCEP("page_fault:PAGE UNMAPPED\n");
-  	    		terminate_process();
-  	    	}
-  	  	}
-  	   } break;
+  		  if(page_entry!=NULL && !page_entry->is_page_loaded)
+  		  {
+  			  DPRINTF_EXCEP("page_fault:LOAD PAGE\n");
+  			  load_supptable_page(page_entry);
+  		  }
+  		  else if(page_entry == NULL &&  (int *)fault_addr >= (int *)(t->stack)-8 && write)
+  		  {
+  			  DPRINTF_EXCEP("page_fault:GROW STACK\n");
+  			  grow_stack(fault_addr);
+  		  }
+  		  else
+  		  {
+  			  if(pagedir_get_page(t->pagedir, fault_addr)==NULL)
+  			  {
+  				  DPRINTF_EXCEP("page_fault:PAGE UNMAPPED\n");
+  				  terminate_process();
+  			  }
+  			  else
+  			  {
+  				  DPRINTF_EXCEP("kill:SWAP EIP/EAX\n");
+  				  f->eip=(void *)f->eax;
+  				  f->eax=(-1);
+  			  }
+  		  }
+  	  } break;
   	}
 }

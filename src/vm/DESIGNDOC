@@ -21,7 +21,7 @@ Ankur Garg <cs1100208@cse.iitd.ernet.in>
 >> Please cite any offline or online sources you consulted while
 >> preparing your submission, other than the Pintos documentation, course
 >> text, lecture notes, and course staff.
-	Operating System Concepts
+	Book-Operating System Concepts
 	LINUX Programmers Manual
 	http://en.wikipedia.org/wiki/Virtual_address_space
 	http://en.wikipedia.org/wiki/Virtual_memory
@@ -58,8 +58,13 @@ struct supptable_page
 
 This structure describes an entry in a supplementary page table.This structure follows its content from the lazy_load_segment() function in process.c:line 521.It saves a hash_elem type hash_index which is used to maintain entries in the hash table datastructure of the supplementary page table.Other contents are the file,offset,uvaddr(user virtual address it is to be mapped with) corresponding read_bytes,zero_bytes, writable(to tell if the page entry to be mapped is writable or not),is_page_loaded in swap/file,swap_slot_id(to identify the swap slot it belongs to if any),swap_writable(if it is to be read-only).
 
+struct thread 
+{
+…
 struct hash suppl_page_table;
-This structure has been added in the structure of thread that is struct thread in thread.h. It defines a per process suppl_page_table for a process. 
+…
+}
+A struct hash suppl_page_table in the struct thread represents the per process shadow page table.
 
 >>>>>>>>>>>> For Swap Space Management <<<<<<<<<<<<
 Our implementation uses a global swap space struct.This struct is protected by a lock.
@@ -111,9 +116,21 @@ This lock is used to manage the access to swap space device and swap table.
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
 
+check this case.###### IMPORTANT
+
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
 >> the page that faulted.
+There are two cases:
+>If the fault was due to user segment then we check if the access was a
+write and the fault address satisfies two conditions:
+	>> It lies in the address range esp-32bytes.
+	>> It also lies within the bounds of stack size.
+
+>If the fault was due to the kernel segment then we check if the access
+was a write and the fault address lies in the address range t->stack-32
+Here t->stack is the saved stack pointer in the struct thread.This is 
+set in the syscall_handler function.	
 
 
 ---- SYNCHRONIZATION ----
@@ -139,6 +156,7 @@ This lock is used to manage the access to swap space device and swap table.
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
 
+
 ---- RATIONALE ----
 
 >> B9: A single lock for the whole VM system would make
@@ -147,6 +165,13 @@ This lock is used to manage the access to swap space device and swap table.
 >> possibility for deadlock but allows for high parallelism.  Explain
 >> where your design falls along this continuum and why you chose to
 >> design it this way.
+
+A single lock for the whole VM system would definitely limit parallelism.
+As stated above, we have used an internal lock for frame table, swap table.
+And since the supplementary page table is per process, it doesn't need a lock.
+Supplementary page table would be immune to context switch. On the other hand,
+there may be processes which want to access the swap table, frame table. And so
+here we need a lock to check their access.
 
 			 MEMORY MAPPED FILES
 			 ===================

@@ -140,7 +140,7 @@ main (void)
   ide_init ();
   locate_block_devices ();
   filesys_init (format_filesys);
-  init_swap_space();		// Swap Space System
+//  init_swap_space();		// Swap Space System
 #endif
 
   printf ("Boot complete.\n");

@@ -31,6 +31,13 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+static bool
+load_segment (struct file *file, off_t ofs, uint8_t *upage,
+              uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+static bool
+setup_stack(void **esp);
+
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -89,7 +96,7 @@ end:
 static void
 start_process (void *file_name_)
 {
-  DPRINTF_PROC("start_process:ENTER\n");
+  DPRINTF_PROC("start_process:BEGIN\n");
   char *file_name = file_name_;
   struct intr_frame if_;
   bool success;
@@ -111,7 +118,7 @@ start_process (void *file_name_)
 
   /* Initilise Supplementary Page Table*/
   init_supptable(&t->suppl_page_table);
-  mmfiles_init(&t->mmfiles);
+//  mmfiles_init(&t->mmfiles);
   /*
   initialize the variables argc to 0
   */
@@ -218,7 +225,7 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid ) 
 {
-  DPRINTF_PROC("process_wait : begin\n");
+  DPRINTF_PROC("process_wait : BEGIN\n");
   struct thread *t;
   int ret;
   
@@ -262,7 +269,7 @@ process_exit (void)
       thread_block ();
       intr_enable ();
     }
-  free_mmfiles(&cur->mmfiles);
+//  free_mmfiles(&cur->mmfiles);
   
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -361,7 +368,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack_vm(void **esp);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool install_page (void *upage, void *kpage, bool writable);
 
@@ -460,7 +467,7 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
   }
 
     /* Set up stack. */
-    if (!setup_stack (esp))
+    if (!setup_stack_vm(esp))
     	goto end;
 
     /* Start address. */
@@ -521,6 +528,53 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
   return true;
 }
 
+static bool
+load_segment (struct file *file, off_t ofs, uint8_t *upage,
+              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+{
+  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+  ASSERT (pg_ofs (upage) == 0);
+  ASSERT (ofs % PGSIZE == 0);
+
+  file_seek (file, ofs);
+  while (read_bytes > 0 || zero_bytes > 0)
+    {
+      /* Calculate how to fill this page.
+         We will read PAGE_READ_BYTES bytes from FILE
+         and zero the final PAGE_ZERO_BYTES bytes. */
+      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+      /* Get a page of memory. */
+      //uint8_t *kpage = palloc_get_page (PAL_USER);
+      uint8_t *kpage = allocateFrame(PAL_USER,upage);
+      if (kpage == NULL)
+        return false;
+
+      /* Load this page. */
+      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
+        {
+          //palloc_free_page (kpage);
+          freeFrame(kpage);
+    	  return false;
+        }
+      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+      /* Add the page to the process's address space. */
+      if (!install_page (upage, kpage, writable))
+        {
+          palloc_free_page (kpage);
+          return false;
+        }
+
+      /* Advance. */
+      read_bytes -= page_read_bytes;
+      zero_bytes -= page_zero_bytes;
+      upage += PGSIZE;
+    }
+  return true;
+}
+
 
 static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable)
@@ -546,21 +600,40 @@ static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	DPRINTF_PROC("lazy_load_segment:SUPP_TABLE ADD SUCCESS\n");
 	return true;
 }
-/* Create a minimal stack by mapping a zeroed page at the top of
-   user virtual memory. */
+
 static bool
-setup_stack (void **esp) 
+setup_stack(void **esp)
 {
   uint8_t *kpage;
   bool success = false;
-  DPRINTF_PROC("setup_stacks:ENTER\n");
+
+  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
+  if (kpage != NULL)
+    {
+      success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
+      if (success)
+        *esp = PHYS_BASE;
+      else
+        palloc_free_page (kpage);
+    }
+  return success;
+}
+
+/* Create a minimal stack by mapping a zeroed page at the top of
+   user virtual memory. */
+static bool
+setup_stack_vm (void **esp)
+{
+  uint8_t *kpage;
+  bool success = false;
+  DPRINTF_PROC("setup_stack_vm:BEGIN\n");
   kpage = allocateFrame(PAL_USER | PAL_ZERO, *esp);
   if (kpage != NULL) 
   {
 	  success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
       {
-    	  DPRINTF_PROC("setup_stacks:SUCCESS\n");
+    	  DPRINTF_PROC("setup_stack_vm:SUCCESS\n");
     	  *esp = PHYS_BASE;
       }
       else

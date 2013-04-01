@@ -85,8 +85,8 @@ static bool remove (char *file);
 static void exit (int status);
 
 // functions for checking the user memory access,strings,buffer address
-static void string_check_terminate(char* str);
-static void user_add_range_check_and_terminate(char* start, int size);
+static int string_check_terminate(char* str);
+static int user_add_range_check_and_terminate(char* start, int size);
 int user_add_range_check(char* start, int size);
 static int is_valid_address(void* add);
 
@@ -123,13 +123,14 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 	int *p;
 	unsigned ret = 0;
     int arg1 = 0, arg2 = 0, arg3 = 0;
-	p = f->esp;
+    if (get_valid_val(f->esp)== -1)
+    			exit(-1);
+    p = f->esp;
 	t->stack = f->esp ;				/* Saving stack pointer (needed to handle kernel page fault) */
-	if (get_valid_val (p)== -1)
-		exit(-1);
 	if (*p < SYS_HALT || *p > SYS_MUNMAP)
 		exit(-1);
-	switch(*p){
+	switch(*p)
+	{
 		case SYS_HALT :
 			DPRINTF_SYS("SYS_HALT\n");
 			halt();					  
@@ -149,7 +150,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 				exit(-1);						  
 			ret = (unsigned)create((char*)arg1, (unsigned)arg2);
 			f->eax = ret; 
-				break;
+			break;
 		case SYS_EXEC : 
 			DPRINTF_SYS("SYS_EXEC\n");
 			arg1=get_valid_val(p+1);
@@ -236,7 +237,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			ret = (unsigned)tell(arg1);
 			f->eax = ret; 
 			break;
-		case SYS_MMAP :
+	/*	case SYS_MMAP :
 			DPRINTF_SYS("SYS_MMAP\n");
 			arg1 = get_valid_val(p+1);
 			arg2 = get_valid_val(p+2);
@@ -252,7 +253,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 				exit(-1);
 			munmap(arg1);
 			break;
-		default:
+	*/	default:
 			thread_exit();
 			break;
 	}
@@ -288,8 +289,8 @@ static void exit(int status){
  * to the fd write to file and then release lock.
  * In case there is no file corresponding to the fd given, exit(-1)
  * */
-static int read (int fd, void *buffer, unsigned size){
-	
+static int read (int fd, void *buffer, unsigned size)
+{
 	struct file *File;
 	int ret = -1;
 	unsigned i;
@@ -330,7 +331,8 @@ static int read (int fd, void *buffer, unsigned size){
  * pushes fd_elements->elem in the list,
  * pushes this file into the list of open files for the current thread
  * */
-static int open (char *File){
+static int open (char *File)
+{
 	struct file *F;
 	struct fd_elements *FDE;
 	int ret = -1;
@@ -459,7 +461,8 @@ static void halt (void){
  * i.e. there is no file with the given fd, then release the lock and return -1;
  * Write to the file and release the lock and return the number of bytes written.
  * */
-static int write (int fd,void *buffer, unsigned size){
+static int write (int fd,void *buffer, unsigned size)
+{
 	struct file *File;
 	int ret = -1;
 	buffer_check_terminate(buffer,size);
@@ -490,8 +493,9 @@ static int write (int fd,void *buffer, unsigned size){
  * it is stored is not user accessible, then exit(-1)else 
  * just call filesys_create with the given file name and file size.
  * */
-static bool create (char *file, unsigned initial_size){
-	string_check_terminate(file);
+static bool create (char *file, unsigned initial_size)
+{
+	string_check_terminate((void *)file);
 	return filesys_create (file, initial_size);
 }
 
@@ -499,7 +503,8 @@ static bool create (char *file, unsigned initial_size){
  * If the memory location is not user accessible, then call exit(-1)
  * Otherwise return filesys_remove with the given file name
  * */
-static bool remove (char *file){
+static bool remove (char *file)
+{
 	string_check_terminate(file);
 	if(!file)
 		return false;
@@ -518,7 +523,7 @@ static int alloc_fid(void)
 		fid++;
 	return fid;
 }
-
+/*
 static mapid_t mmap (int fd, void *addr)
 {
 	DPRINTF_SYS("entered syscall mmap\n");
@@ -622,53 +627,69 @@ static struct fd_elements *findFdElemProcess (int fd) {
  * */
 static void buffer_check_terminate(void *buffer, unsigned size)
 {
-	DPRINTF_SYS("buffer_check_terminate:\n");
+	if (get_valid_val(buffer)== -1)
+	{
+		DPRINTF_SYS("buffer_check_terminate:TERMINATE");
+		exit (-1);
+	}
 	unsigned buffer_size = size;
 	void *buffer_tmp ;
 	buffer_tmp= buffer;
-	while(buffer_tmp != NULL) {
-		if (!is_user_vaddr(buffer_tmp) || buffer_tmp==NULL){
-			DPRINTF_SYS("buffer_check_terminate: exit(-1)");
+	while(buffer_tmp != NULL)
+	{
+		if (get_valid_val(buffer_tmp)==-1)
+		{
+			DPRINTF_SYS("buffer_check_terminate: TERMINATE");
 			exit (-1);
 		}
 
 		if (buffer_size == 0)
 			buffer_tmp = NULL;
-		else if (buffer_size > PGSIZE) {
+		else if (buffer_size > PGSIZE)
+		{
 			buffer_tmp += PGSIZE;
 			buffer_size -= PGSIZE;
 		}
-		else {
+		else
+		{
 			buffer_tmp = buffer + size - 1;
 			buffer_size = 0;
 		}
 	}
+	DPRINTF_SYS("buffer_check_terminate:PASSED\n");
 }
 
 /* Checks the validity of the string
  * terminates the process is address is invalid
  * */
-void string_check_terminate(char* str)
+int string_check_terminate(char* str)
 {
-  char* tmp = str;
-  user_add_range_check_and_terminate(tmp, 1);
-  while(*tmp) 									// loop untill NULL is found
-  {
-    ++tmp;
-    user_add_range_check_and_terminate(tmp, 1); // check and terminate
-  }
-  DPRINTF_SYS("string_check:SUCCESS\n");
+	char *tmp;
+	tmp=str;
+	if(get_valid_val((void*)tmp)==-1)
+		terminate_process();
+	while((tmp-str)<PGSIZE && *tmp!='\0')
+	{
+		tmp++;
+		if(get_valid_val((void*)tmp)==-1)
+			terminate_process();
+
+	}
+	DPRINTF_SYS("string_check:PASSED\n");
+	return 0;
 }
 
 /* Helping function for string_check_terminate
  * Responsible for termination
  * */
-void user_add_range_check_and_terminate(char* start, int size)
+int user_add_range_check_and_terminate(char* start, int size)
 {
-  if(!user_add_range_check(start, size))
-  {
-    terminate_process();
-  }
+	if(!user_add_range_check(start, size))
+	{
+		return -1;
+	}
+	DPRINTF_SYS("user_add_range_check_and_terminate:SUCCESS\n");
+	return 0;
 }
 
 /* Helping function for above function
@@ -677,12 +698,14 @@ void user_add_range_check_and_terminate(char* start, int size)
 int user_add_range_check(char* start, int size)
 {
   unsigned ptr;
-
   for(ptr = (unsigned)start; ptr < (unsigned)(start+size);
-      ptr = ptr + (PGSIZE - ptr % PGSIZE))  // jump to last entry of a page
-    if(!is_valid_address((void*)ptr))
-      return 0;
-
+      ptr = ptr + (PGSIZE - ptr % PGSIZE))
+  	  {  // jump to last entry of a page
+	  	  printf("looping\n");
+	  	  if(is_valid_address((void*)ptr)== -1)
+	  		  return -1;
+  	  }
+  DPRINTF_SYS("user_add_range_check:SUCCESS\n");
   return 1;
 }
 
@@ -691,11 +714,11 @@ int user_add_range_check(char* start, int size)
  * */
 int is_valid_address(void* add)
 {
-  if(!add)
-    return 0;
+  if(add==NULL)
+    return -1;
   if(add >= (void*)PHYS_BASE)
-    return 0;
-  return 1;
+    return -1;
+  return 0;
 }
 
 /* Function to kill the current thread

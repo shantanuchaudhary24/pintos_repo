@@ -12,11 +12,9 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-#include "vm/page.h"        // LAB3 IMPLEMENTATION
+#include "vm/page.h"
 #ifdef USERPROG
-//LAB2 IMPLEMENTATION
 #include "userprog/process.h"
-//===LAB2 IMPLEMENATION
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -276,7 +274,6 @@ struct thread *
 thread_current (void) 
 {
   struct thread *t = running_thread ();
-//  printf("thread name %s\n", t->name);
   /* Make sure T is really a thread.
      If either of these assertions fire, then your thread may
      have overflowed its stack.  Each thread has less than 4 kB
@@ -312,7 +309,7 @@ thread_exit (void)
   struct thread *t=thread_current();
   list_remove (&t->allelem);
   t->status = THREAD_DYING;
-  free_supptable(&t->suppl_page_table); 			// freeing the supplementary table
+//  free_supptable(&t->suppl_page_table); 			// freeing the supplementary table
   schedule ();
   NOT_REACHED ();
 }
