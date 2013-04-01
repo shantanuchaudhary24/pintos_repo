@@ -82,7 +82,7 @@ static void seek (int fd, unsigned position);
 static bool remove (char *file);
 
 // function for handling the exit system call
-static void exit (int status);
+void exit (int status);
 
 // functions for checking the user memory access,strings,buffer address
 static int string_check_terminate(char* str);
@@ -265,7 +265,7 @@ return;
  * Puts exit status in the return status of the thread for future reference
  * Exits the thread. 
  * */
-static void exit(int status)
+void exit(int status)
 {
 	struct thread *t;
 	struct list_elem *l;
