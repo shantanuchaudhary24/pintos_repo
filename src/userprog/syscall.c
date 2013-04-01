@@ -265,7 +265,8 @@ return;
  * Puts exit status in the return status of the thread for future reference
  * Exits the thread. 
  * */
-static void exit(int status){
+static void exit(int status)
+{
 	struct thread *t;
 	struct list_elem *l;
 	DPRINTF_SYS("exit : begin\n");
@@ -400,8 +401,10 @@ static pid_t exec (char *cmd_line){
 /* If there is no thread by the given pid, then exit(-1)
  * else return call process_wait with this pid
  * */
-static int wait (pid_t pid){
-	if(!get_thread_by_tid(pid)){
+static int wait (pid_t pid)
+{
+	if(!get_thread_by_tid(pid))
+	{
 		DPRINTF_SYS("wait : exit(-1)\n");
 		exit(-1);
 	}
