@@ -118,7 +118,7 @@ start_process (void *file_name_)
 
   /* Initilise Supplementary Page Table*/
   init_supptable(&t->suppl_page_table);
-//  mmfiles_init(&t->mmfiles);
+  mmfiles_init(&t->mmfiles);
   /*
   initialize the variables argc to 0
   */
@@ -269,8 +269,7 @@ process_exit (void)
       thread_block ();
       intr_enable ();
     }
-  free_supptable(&cur->suppl_page_table);
-//  free_mmfiles(&cur->mmfiles);
+  free_mmfiles(&cur->mmfiles);
   
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */

@@ -237,7 +237,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			ret = (unsigned)tell(arg1);
 			f->eax = ret; 
 			break;
-	/*	case SYS_MMAP :
+		case SYS_MMAP :
 			DPRINTF_SYS("SYS_MMAP\n");
 			arg1 = get_valid_val(p+1);
 			arg2 = get_valid_val(p+2);
@@ -253,7 +253,7 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 				exit(-1);
 			munmap(arg1);
 			break;
-	*/	default:
+		default:
 			thread_exit();
 			break;
 	}
@@ -526,7 +526,7 @@ static int alloc_fid(void)
 		fid++;
 	return fid;
 }
-/*
+
 static mapid_t mmap (int fd, void *addr)
 {
 	DPRINTF_SYS("entered syscall mmap\n");

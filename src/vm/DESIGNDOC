@@ -58,6 +58,7 @@ struct supptable_page
 
 This structure describes an entry in a supplementary page table.This structure follows its content from the lazy_load_segment() function in process.c:line 521.It saves a hash_elem type hash_index which is used to maintain entries in the hash table datastructure of the supplementary page table.Other contents are the file,offset,uvaddr(user virtual address it is to be mapped with) corresponding read_bytes,zero_bytes, writable(to tell if the page entry to be mapped is writable or not),is_page_loaded in swap/file,swap_slot_id(to identify the swap slot it belongs to if any),swap_writable(if it is to be read-only).
 
+
 struct thread 
 {
 …
@@ -84,14 +85,17 @@ This lock is used to manage the access to swap space device and swap table.
 >> A2: In a few paragraphs, describe your code for locating the frame,
 >> if any, that contains the data of a given page.
 
+
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
+We haven't implemented sharing of frames. So, this problem doesn't arise.
 
 ---- SYNCHRONIZATION ----
 
 >> A4: When two user processes both need a new frame at the same time,
 >> how are races avoided?
+
 
 ---- RATIONALE ----
 
@@ -107,16 +111,47 @@ This lock is used to manage the access to swap space device and swap table.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+The following struct has been added to implement the frame Table. Each entry in the frame Table is an instance of this struct.
+struct frameStruct {
+	void *frame;
+	tid_t tid;
+	void *page;
+	struct list_elem listElement;
+};
+
+The following is a list used to maintain records of the frame alloted.
+struct list frameTable;
+
+The struct frameStruct contains following elements:
+frame is used to store the frame which this entry refers to.
+tid is used to store the thread to which this entry belongs.
+page is the virtual address in the pagedir of the thread which is mapped to this frame
+and finally listElement of the type list_elem which is used to maintain the entries in the list
+
 ---- ALGORITHMS ----
 
 >> B2: When a frame is required but none is free, some frame must be
 >> evicted.  Describe your code for choosing a frame to evict.
 
+We have implemented the clock algorithm for finding out the frame to evict.
+
+When a frame is needed but no frame is free, then a pointer traverses the whole list,
+and keeps moving forward till it finds a frame with 0 accessed bit. During the traversal,
+it marks the accessed bits of all the frames as 0. The chosen frame is removed from
+it position and it pushed at the end of the list.
+
+
 >> B3: When a process P obtains a frame that was previously used by a
 >> process Q, how do you adjust the page table (and any other data
 >> structures) to reflect the frame Q no longer has?
 
-check this case.###### IMPORTANT
+When a frame previously being used by Q is chosen to be evicted, we know that
+it belonged to Q using the tid stored in the frameStruct and also we know the
+virtual address it is mapped to in the process Q's pagedir (using the page
+stored in frameStruct). So, we use pagedir_clear_page() to remove the mapping of 
+this virtual address from the process Q's page directory so that Q no longer
+has a reference to this frame. Then this frame can be used by the process P.
+
 
 >> B4: Explain your heuristic for deciding whether a page fault for an
 >> invalid virtual address should cause the stack to be extended into
@@ -182,14 +217,61 @@ here we need a lock to check their access.
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+The following structure is used for the memory mapped files.
+struct mmfStruct {
+	mapid_t mapid;
+	struct file *file;
+	void * begin_addr;
+	unsigned pageCount;
+	struct hash_elem Element;
+};
+
+This structure contains mapid which denotes the is of each mapping
+file: the corresponding opened file which this mapping corresponds to.
+begin_addr: the address at which the mapping begins
+pageCount: the number of pages which are used in the mapping of this file
+Element: hash_elem used to maintain the hash index in the mmfiles hash table below.
+
+Following changes are made to the thread struct in the thread.h corresponding to the 
+mmfiles.
+struct thread {
+…
+struct hash mmfiles;
+mapid_t mapid_allocator;
+…
+}
+struct hash mmfiles: This is the per thread hash table for maintaing
+the memory mapped files corresponding to each thread. Each entry in this
+hash table corresponds to one mapping
+mapid_allocator: this is used to store the max mapid used so far. It is
+used to allocate a new id to the mapping of that thread.
+
 ---- ALGORITHMS ----
 
 >> C2: Describe how memory mapped files integrate into your virtual
 >> memory subsystem.  Explain how the page fault and eviction
 >> processes differ between swap pages and other pages.
 
+As explained above, a hash table is maintained in each process to maintain 
+the memory mapped files of that process. When a process begins, the hash
+table is initialised. Files are mapped and unmapped using the mmap and unmap
+system calls which are handled in the syscall_handler(). mmap loads an opened
+file into the memory, allotes a new mapid to it and created a corresponding 
+entry in the mmfiles hash table. munmap frees the memory corresponding to the
+mapping. If the corresponding pages are dirty, the page contents are written
+back to the file, othewise it directly frees the pages. Whenever a process
+exits, all the mapping in the hash table mmfiles are removed.
+
 >> C3: Explain how you determine whether a new file mapping overlaps
 >> any existing segment.
+
+Before the mmfiles_insert function is called (for mapping the file), we 
+calculate the number of pages required to map the given file using the 
+file_length(). Starting from the begin_addr, we check all the pages upto 
+(n-1)*PGSIZE + being_addr. If any of them is already mapped to any frame
+then we return -1. The pages are checked in both the supplemental page 
+table as well as the pagedir of the process. If it is present in any of 
+the tables, we return -1.
 
 ---- RATIONALE ----
 
@@ -199,6 +281,16 @@ here we need a lock to check their access.
 >> that much of their implementation can be shared.  Explain why your
 >> implementation either does or does not share much of the code for
 >> the two situations.
+
+Both the mappings: the ones created by the mmap and the ones created for
+the executables have similar seamtics. That's why we have used the same
+data structure to represent both the mappings. Both the mapping are stored
+in the supplementary page table. Since both are using the same data structure
+and same hash table, we have tried to make them share the code as much as
+possible. For e.g. the function supptable_add_file(...) is common to both
+mappings. We just included one more parameter to distinguish between the
+mappings. This parameter is page_type. This is stored in the suppl_page_table
+to distinguish between the mappings.
 
 			   SURVEY QUESTIONS
 			   ================
