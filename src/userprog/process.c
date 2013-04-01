@@ -269,6 +269,7 @@ process_exit (void)
       thread_block ();
       intr_enable ();
     }
+  free_supptable(&cur->suppl_page_table);
 //  free_mmfiles(&cur->mmfiles);
   
   /* Destroy the current process's page directory and switch back
@@ -392,7 +393,8 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
 	process_activate ();
 
 	/* Open executable file. */
-  	file = filesys_open (file_name);
+  	//lock_acquire(&fileLock);
+	file = filesys_open (file_name);
     if (file == NULL)
     {
     	DPRINTF_PROC("load:FILE IS NULL\n");
@@ -476,7 +478,8 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
 
     end:
     /* We arrive here whether the load is successful or not. */
-    file_close (file);
+    //file_close (file);
+    lock_release(&fileLock);
     return success;
 }
 
