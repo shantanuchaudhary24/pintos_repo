@@ -477,8 +477,8 @@ bool load (const char *file_name, void (**eip) (void), void **esp)
 
     end:
     /* We arrive here whether the load is successful or not. */
-    //file_close (file);
-    lock_release(&fileLock);
+    file_close (file);
+    //lock_release(&fileLock);
     return success;
 }
 

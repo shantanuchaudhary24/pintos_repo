@@ -5,6 +5,7 @@
 #include "threads/interrupt.h"		// reference to library for intr_frame 
 #include "threads/thread.h"			
 #include "lib/syscall-nr.h"
+#include "lib/stdio.h"
 #include "threads/vaddr.h"
 #include "threads/init.h"
 #include "userprog/process.h"
@@ -82,7 +83,7 @@ static void seek (int fd, unsigned position);
 static bool remove (char *file);
 
 // function for handling the exit system call
-void exit (int status);
+static void exit (int status);
 
 // functions for checking the user memory access,strings,buffer address
 static int string_check_terminate(char* str);
