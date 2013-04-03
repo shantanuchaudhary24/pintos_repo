@@ -110,7 +110,6 @@ void write_page_to_file(struct supptable_page *page_entry)
  * */
 struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 {
-	DPRINT_PAGE("get_supptable_page: VADDR:%x\n",(uint32_t)vaddr);
 	struct hash_elem *temp_hash_elem;
 	struct supptable_page page_entry;
 
@@ -118,7 +117,10 @@ struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 	temp_hash_elem=hash_find(table,&page_entry.hash_index);
 
 	if(temp_hash_elem!=NULL)
+	{
+		DPRINT_PAGE("get_supptable_page:RETURN PAGE->VADDR:%x\n",(uint32_t)vaddr);
 		return hash_entry(temp_hash_elem,struct supptable_page,hash_index);
+	}
 	else
 	{
 		DPRINTF_PAGE("get_supptable_page:NULL RETURN\n");
@@ -251,7 +253,7 @@ static bool load_page_file(struct supptable_page *page_entry)
 	DPRINT_PAGE("load_page_file:PAGE UVADDR:%x\n",(uint32_t)page_entry->uvaddr);
 	void *kpage;
 	kpage= allocateFrame(PAL_USER,page_entry->uvaddr);
-	DPRINT_PAGE("load_page_file:PAGE kpage:%x\n",kpage);
+	DPRINT_PAGE("load_page_file:PAGE kpage:%x\n",(uint32_t)kpage);
 
 	if (kpage == NULL)
 	{
@@ -266,6 +268,7 @@ static bool load_page_file(struct supptable_page *page_entry)
 	    return false;
 	}
 	memset(kpage + page_entry->read_bytes, 0,page_entry->zero_bytes);
+	//printf("fault point:\n");
 	if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->writable))
 	{
 		DPRINTF_PAGE("load_page_file:FREE FRAME");

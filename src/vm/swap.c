@@ -15,7 +15,7 @@ size_t swap_out_page(void *vaddr);
 void swap_in_page(size_t swap_slot,void *vaddr);
 void swap_clear_slot(size_t swap_slot);
 void destroy_swap_space(void);
-
+size_t bitmap_table_size(void);
 /* Initialize the swap space which consists
  * of the swap disk and swap table(bitmap structure).
  * If swap disk assignment fails, it returns NULL.
@@ -33,12 +33,12 @@ void init_swap_space(void)
     if(swap_space->swap_disk==NULL)
         PANIC("NO SWAP DISK FOUND");
     
-    size_t bit_cnt=block_size(swap_space->swap_disk)/NUM_SECTORS_PER_PAGE;
-	swap_space->swap_table=bitmap_create(bit_cnt);
+    size_t bit_cnt=bitmap_table_size();
+    swap_space->swap_table=bitmap_create(bit_cnt);
 
 	if(swap_space->swap_table==NULL)
         PANIC("SWAP TABLE COULD NOT BE CREATED");
-    
+
 	bitmap_set_all(swap_space->swap_table,false);
 }
 
@@ -65,6 +65,7 @@ size_t swap_out_page(void *vaddr)
     if (swap_slot==BITMAP_ERROR)
     {
     	lock_release(&swap_lock);
+    	PANIC("swap_out_page:SWAP SLOT ERROR\n");
     	return SWAP_ERROR;
     }
     
@@ -96,7 +97,7 @@ void swap_in_page(size_t swap_slot,void *vaddr)
 		buffer=vaddr+counter*BLOCK_SECTOR_SIZE;
 		block_read(swap_space->swap_disk,sector,buffer);
 	}
-	bitmap_mark(swap_space->swap_table,swap_slot);
+	bitmap_reset(swap_space->swap_table,swap_slot);
 	lock_release(&swap_lock);
 }
 
@@ -115,4 +116,16 @@ void swap_clear_slot(size_t swap_slot)
 		DPRINTF_SWAP("swap_clear_slot:SWAP SLOT ALREADY CLEAR\n");
 	}
 	lock_release(&swap_lock);
+}
+
+size_t bitmap_table_size(void)
+{
+	size_t bit_cnt=0;
+	int disk_size=block_size(swap_space->swap_disk);
+	int sectors_per_page=NUM_SECTORS_PER_PAGE;
+	DPRINT_SWAP("init_swap_space:BLOCK_SIZE:%d\n",disk_size);
+	DPRINT_SWAP("init_swap_space:NUM_SECTORS_PER_PAGE:%d\n",sectors_per_page);
+	bit_cnt=disk_size/sectors_per_page;
+	DPRINT_SWAP("init_swap_space:BIT_CNT:%d\n",bit_cnt);
+	return bit_cnt;
 }

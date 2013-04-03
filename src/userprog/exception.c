@@ -223,6 +223,11 @@ page_fault (struct intr_frame *f)
   		  DPRINT_EXCEP("EIP is:%x\n",(void *)f->eip);
   		  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
   		  {
+  			  printf("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
+  			  printf("page_fault:KERNEL t->stack addr:%x\n",(uint32_t)t->stack);
+  			  printf("is_user_vaddr(fault_addr):%d\n",is_user_vaddr(fault_addr));
+  			  printf("EIP is:%x\n",(void *)f->eip);
+
   			  DPRINTF_EXCEP("page_fault:KCSEG:WRITE VIOLATION/NULL/INVALID_USER_VADDR\n");
   			  terminate_process();
   		  }
