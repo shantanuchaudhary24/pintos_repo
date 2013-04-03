@@ -61,7 +61,7 @@ void *allocateFrame(enum palloc_flags FLAG, void *page)
 		}
 		// else just exit and return the frame (this frame is already in the frameTable)
 	}
-	else
+	else if(page!=0)
 	{
 		// if allocation of a new page succeeded, add this new frame to the frameTable
 		DPRINTF_FRAME("allocateFrame:ADD FRAME TO TABLE\n");
@@ -87,7 +87,8 @@ void *evictFrameFor(void *page){
 
 	if(evictedFrame == NULL)
 		PANIC("Can't find any Frame to evict");
-
+	printf(">>>>>>>>>>>>>>>>>frame addr:%x\n",evictedFrame->frame);
+	printf(">>>>>>>>>>>>>>>>>page addr:%x\n",evictedFrame->page);
 	if(!saveEvictedFrame(evictedFrame))
 		PANIC("Can't save Evicted Frame");
 	
@@ -137,7 +138,7 @@ static struct frameStruct *findFrameForEviction(void){
 		if(frame != NULL)
 			break;
 	}
-	DPRINTF_FRAME("findFrameForEviction:RETURN SUCCESS");
+	DPRINTF_FRAME("findFrameForEviction:RETURN SUCCESS\n");
 	return frame;
 }
 
@@ -150,8 +151,10 @@ static bool saveEvictedFrame(struct frameStruct *frame)
 	if(spte == NULL)
 	{
 		spte = calloc(1, sizeof(spte));
+		printf("frame->page:%x\n",frame->page);
 		spte->uvaddr = frame->page;
 		spte->page_type = SWAP;
+		printf("NULL return in loop1\n");
 		if(!supptable_add_page(&t->suppl_page_table, spte))
 			return false;
 	}
@@ -160,7 +163,9 @@ static bool saveEvictedFrame(struct frameStruct *frame)
 		write_page_to_file(spte);
 	else if(pagedir_is_dirty (t->pagedir, spte->uvaddr) || !(spte->page_type & FILE))
 	{
+		printf("spte->uvaddr:%x\n",spte->uvaddr);
 		swapSlotID = swap_out_page(spte->uvaddr);
+
 		if(swapSlotID == SWAP_ERROR)
 			return false;
 		spte->page_type = spte->page_type | SWAP;
@@ -180,7 +185,7 @@ static bool addFrameToTable(void *frame, void *page)
 {
 	struct frameStruct *newFrameEntry;
 	newFrameEntry = getFrameFromTable(frame);
-	
+	printf("search page addr:%x\n",page);
 	if(newFrameEntry!=NULL)
 	{
 		DPRINTF_FRAME("addFrameToTable:REMOVE PREV FRAME");

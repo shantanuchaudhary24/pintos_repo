@@ -2,6 +2,7 @@
 //13018
 #include <inttypes.h>
 #include <stdio.h>
+#include "lib/debug.h"
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -102,10 +103,8 @@ kill (struct intr_frame *f)
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
-    	f->eip=(void *)f->eax;
-    	f->eax=(-1);
-    	//intr_dump_frame(f);
-    	//PANIC("Kernel bug-unexpected interrupt in kernel");
+    	 intr_dump_frame(f);
+    	 PANIC("Kernel bug-unexpected interrupt in kernel");
     	break;
     }
     default:
@@ -161,7 +160,10 @@ page_fault (struct intr_frame *f)
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  	  	  	  	  	  	  	 /*  PAGE FAULT HANDLING*/
+  DPRINT_EXCEP("not_present:%d\n",not_present);
+  DPRINT_EXCEP("write:%d\n",write);
+  DPRINT_EXCEP("user:%d\n",user);
+	  	  	  	  	  	  	  /*  PAGE FAULT HANDLING*/
 
   switch(f->cs)
   {
@@ -175,25 +177,25 @@ page_fault (struct intr_frame *f)
   	   * */
 	  case SEL_UCSEG:
   	  {
-  		  DPRINT_EXCEP("page_fault:USER fault_addr:%x\n",(uint32_t)fault_addr);
+  		  DPRINT_EXCEP("page_fault:UCSEG:fault_addr:%x\n",(uint32_t)fault_addr);
 
   		  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
   		  {
-  			  DPRINTF_EXCEP("page_fault:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
+  			  DPRINTF_EXCEP("page_fault:UCSEG:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
   			  terminate_process();
   		  }
 
   		  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
-  		  DPRINT_EXCEP("page_fault:Getting correct Entry Addr:%x\n",(uint32_t)page_entry->uvaddr);
+  		  DPRINT_EXCEP("page_fault:UCSEG:Getting correct Entry Addr:%x\n",(uint32_t)page_entry->uvaddr);
 
   		  if(page_entry!=NULL && !page_entry->is_page_loaded)
   		  {
-  			  DPRINTF_EXCEP("page_fault:LOAD PAGE\n");
+  			  DPRINTF_EXCEP("page_fault:UCSEG:LOAD PAGE\n");
   			  load_supptable_page(page_entry);
   		  }
   		  else if(page_entry==NULL && (int *)fault_addr>=(int *)(f->esp)-8 && pg_round_down(fault_addr)>=(PHYS_BASE-STACK_SIZE) && write)
   		  {
-  			  DPRINTF_EXCEP("page_fault:GROW STACK\n");
+  			  DPRINTF_EXCEP("page_fault:UCSEG:GROW STACK\n");
   			  grow_stack(fault_addr);
   		  }
   		  else
@@ -216,9 +218,12 @@ page_fault (struct intr_frame *f)
 	  case SEL_KCSEG:
   	  {
   		  DPRINT_EXCEP("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
-  		  if(!is_user_vaddr(t->stack) || !not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
+  		  DPRINT_EXCEP("page_fault:KERNEL t->stack addr:%x\n",(uint32_t)t->stack);
+  		  DPRINT_EXCEP("is_user_vaddr(fault_addr):%d\n",is_user_vaddr(fault_addr));
+  		  DPRINT_EXCEP("EIP is:%x\n",(void *)f->eip);
+  		  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
   		  {
-  			  DPRINTF_EXCEP("page_fault:WRITE VIOLATION/NULL/INVALID_USER_VADDR\n");
+  			  DPRINTF_EXCEP("page_fault:KCSEG:WRITE VIOLATION/NULL/INVALID_USER_VADDR\n");
   			  terminate_process();
   		  }
 
@@ -226,26 +231,25 @@ page_fault (struct intr_frame *f)
 
   		  if(page_entry!=NULL && !page_entry->is_page_loaded)
   		  {
-  			  DPRINTF_EXCEP("page_fault:LOAD PAGE\n");
+  			  DPRINTF_EXCEP("page_fault:KCSEG:LOAD PAGE\n");
   			  load_supptable_page(page_entry);
   		  }
-  		  else if(page_entry == NULL &&  (int *)fault_addr >= (int *)(t->stack)-8 && write)
+  		  else if(page_entry == NULL && (int *)fault_addr>=(int *)(t->stack)-8)
   		  {
-  			  DPRINTF_EXCEP("page_fault:GROW STACK\n");
+  			  DPRINTF_EXCEP("page_fault:KCSEG:GROW STACK\n");
   			  grow_stack(fault_addr);
   		  }
   		  else
   		  {
   			  if(pagedir_get_page(t->pagedir, fault_addr)==NULL)
   			  {
-  				  DPRINTF_EXCEP("page_fault:PAGE UNMAPPED\n");
+  				  DPRINTF_EXCEP("page_fault:KCSEG:PAGE UNMAPPED\n");
   				  terminate_process();
   			  }
   			  else
   			  {
-  				  DPRINTF_EXCEP("kill:SWAP EIP/EAX\n");
-  				  f->eip=(void *)f->eax;
-  				  f->eax=(-1);
+  				  DPRINTF_EXCEP("page_fault:KCSEG:KERNEL BUG\n");
+  				  kill(f);
   			  }
   		  }
   	  } break;

@@ -269,6 +269,7 @@ process_exit (void)
       thread_block ();
       intr_enable ();
     }
+  free_supptable(&cur->suppl_page_table); 			// freeing the supplementary table
   free_mmfiles(&cur->mmfiles);
   
   /* Destroy the current process's page directory and switch back
@@ -589,7 +590,7 @@ static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
 	{
 		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
         size_t page_zero_bytes = PGSIZE - page_read_bytes;
-        if(!supptable_add_file(FILE,file,ofs,upage,read_bytes,zero_bytes,writable))
+        if(!supptable_add_file(FILE,file,ofs,upage,page_read_bytes,page_zero_bytes,writable))
         {
         	DPRINTF_PROC("lazy_load_segment:SUPP_TABLE ADD FAIL\n");
         	return false;

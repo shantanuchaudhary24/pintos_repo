@@ -85,20 +85,18 @@ static bool remove (char *file);
 // function for handling the exit system call
 static void exit (int status);
 
+static mapid_t mmap (int, void *);
+static void munmap (mapid_t);
+
+
 // functions for checking the user memory access,strings,buffer address
 static int string_check_terminate(char* str);
-static int user_add_range_check_and_terminate(char* start, int size);
-int user_add_range_check(char* start, int size);
-static int is_valid_address(void* add);
 
 
 static void buffer_check_terminate(void *buffer, unsigned size);
 static int get_valid_val(int *uaddr);
 static int get_user (const int *uaddr);
 void terminate_process(void);
-
-static mapid_t mmap (int, void *);
-static void munmap (mapid_t);
 
 void syscall_init (void) {
 	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
@@ -208,7 +206,10 @@ static void syscall_handler (struct intr_frame *f /*UNUSED*/)
 			arg2=get_valid_val(p+2);
 			arg3=get_valid_val(p+3);
 			if (arg1==(-1) || arg2==(-1) || arg3==(-1))
+			{
+				DPRINTF_SYS("SYS_READ:ARG FAIL\n");
 				exit(-1);						  
+			}
 			ret = (unsigned)read(arg1, (void*)arg2, (unsigned)arg3);
 			f->eax = ret; 
 			break;
@@ -266,7 +267,7 @@ return;
  * Puts exit status in the return status of the thread for future reference
  * Exits the thread. 
  * */
-void exit(int status)
+static void exit(int status)
 {
 	struct thread *t;
 	struct list_elem *l;
@@ -683,55 +684,6 @@ int string_check_terminate(char* str)
 	return 0;
 }
 
-/* Helping function for string_check_terminate
- * Responsible for termination
- * */
-int user_add_range_check_and_terminate(char* start, int size)
-{
-	if(!user_add_range_check(start, size))
-	{
-		return -1;
-	}
-	DPRINTF_SYS("user_add_range_check_and_terminate:SUCCESS\n");
-	return 0;
-}
-
-/* Helping function for above function
- * responsible for traversing the string address references
- * */
-int user_add_range_check(char* start, int size)
-{
-  unsigned ptr;
-  for(ptr = (unsigned)start; ptr < (unsigned)(start+size);
-      ptr = ptr + (PGSIZE - ptr % PGSIZE))
-  	  {  // jump to last entry of a page
-	  	  printf("looping\n");
-	  	  if(is_valid_address((void*)ptr)== -1)
-	  		  return -1;
-  	  }
-  DPRINTF_SYS("user_add_range_check:SUCCESS\n");
-  return 1;
-}
-
-/* Checks that address should not be NULL
- * and below PHYS_BASE
- * */
-int is_valid_address(void* add)
-{
-  if(add==NULL)
-    return -1;
-  if(add >= (void*)PHYS_BASE)
-    return -1;
-  return 0;
-}
-
-/* Function to kill the current thread
- * */
-void terminate_process(void)
-{
-	DPRINTF_SYS("TERMINATE_PROCESS\n");
-	exit(-1);
-}
 
 /* Verifies the addresses passed to it by checking if they are
  * not NULL as well as not lying in the kernel space above PHYS_BASE.
@@ -756,4 +708,11 @@ get_user (const int *uaddr)
   asm ("movl $1f, %0; movl %1, %0; 1:"		
        : "=&a" (result) : "m" (*uaddr));
   return result;
+}
+
+/* Just kill the process*/
+void terminate_process(void)
+{
+	DPRINTF_SYS("PROCESS TERMINATED\n");
+	exit(-1);
 }

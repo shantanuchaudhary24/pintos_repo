@@ -79,11 +79,11 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 	page_entry->writable=writable;
 	page_entry->is_page_loaded=false;
 
-	DPRINT_PAGE("supptable_add_file: ENTRY ADDR:%x\n",(uint32_t)(page_entry->uvaddr));
+	//DPRINT_PAGE("supptable_add_file: ENTRY ADDR:%x\n",(uint32_t)(page_entry->uvaddr));
 
 	if(hash_insert(&t->suppl_page_table,&page_entry->hash_index)==NULL)
 	{
-		DPRINTF_PAGE("supptable_add_file:PAGE ADDED.\n");
+		//DPRINTF_PAGE("supptable_add_file:PAGE ADDED.\n");
 		return true;
 	}
 	else
