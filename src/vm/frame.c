@@ -105,27 +105,37 @@ static struct frameStruct *findFrameForEviction(void){
 	struct list_elem *e;
 	struct thread *t;
 	printf("Evicted frame:ENTER\n");
-	e = list_head(&frameTable);
-	e = list_next(e);
-	for(; e != list_tail(&frameTable); e = list_next(e))
-	{
-		temp = list_entry (e, struct frameStruct, listElement);
-		t=get_thread_by_tid(temp->tid);
-		printf("page in temp:%x frame in temp:%x\n",temp->page,temp->frame);
-		if(!pagedir_is_accessed(t->pagedir, temp->page))
+	
+	int i = 0;
+	
+	for(i = 0; i < 2; i++){
+	
+		e = list_head(&frameTable);
+		e = list_next(e);
+		
+		for(; e != list_tail(&frameTable); e = list_next(e))
 		{
-			printf("loop 1\n");
-			frame = temp;
-			list_remove(e);
-			list_push_back(&frameTable, e);
+			temp = list_entry (e, struct frameStruct, listElement);
+			t=get_thread_by_tid(temp->tid);
+			printf("page in temp:%x frame in temp:%x\n",temp->page,temp->frame);
+			if(!pagedir_is_accessed(t->pagedir, temp->page))
+			{
+				printf("loop 1\n");
+				frame = temp;
+				list_remove(e);
+				list_push_back(&frameTable, e);
+				break;
+			}
+			else
+			{
+				printf("loop 2\n");
+				pagedir_set_accessed(t->pagedir, temp->page, false);
+			}
+			printf("loop 3\n");
+		}
+		
+		if(frame != NULL)
 			break;
-		}
-		else
-		{
-			printf("loop 2\n");
-			pagedir_set_accessed(t->pagedir, temp->page, false);
-		}
-		printf("loop 3\n");
 	}
 	DPRINTF_FRAME("findFrameForEviction:RETURN SUCCESS");
 	return frame;
@@ -153,7 +163,6 @@ static bool saveEvictedFrame(struct frameStruct *frame)
 		swapSlotID = swap_out_page(spte->uvaddr);
 		if(swapSlotID == SWAP_ERROR)
 			return false;
-
 		spte->page_type = spte->page_type | SWAP;
 	}
 
