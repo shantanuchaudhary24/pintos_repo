@@ -37,9 +37,7 @@ static bool page_less (const struct hash_elem *a_, const struct hash_elem *b_,vo
  * */
 bool init_supptable(struct hash *table)
 {
-	if(hash_init(table,page_hash,page_less,NULL))
-		return true;
-	else return false;	
+	return hash_init(table,page_hash,page_less,NULL);
 }
 
 /* Function to add page to suppl. table by checking if pointer 
@@ -98,7 +96,7 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 
 void write_page_to_file(struct supptable_page *page_entry)
 {
-	if(page_entry->page_type==MMF)
+	if(page_entry->page_type & MMF)
 	{
 		file_seek(page_entry->file,page_entry->offset);
 		file_write(page_entry->file,page_entry->uvaddr,page_entry->read_bytes);
@@ -123,7 +121,7 @@ struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
 		return hash_entry(temp_hash_elem,struct supptable_page,hash_index);
 	else
 	{
-		DPRINTF_PAGE("get_supptable_page:NULL RETURN");
+		DPRINTF_PAGE("get_supptable_page:NULL RETURN\n");
 		return NULL;
 	}
 }
@@ -148,7 +146,7 @@ static void supptable_free_page(struct hash_elem *element, void *aux UNUSED)
 	struct supptable_page *temp_page;
 	temp_page=hash_entry(element,struct supptable_page, hash_index);
 	if(temp_page->page_type & SWAP)
-		swap_clear_slot(temp_page->swap_slot_id);// clear swap slot too if occupied any but in case of sharing this will not be removed
+		swap_clear_slot(temp_page->swap_slot_index);// clear swap slot too if occupied any but in case of sharing this will not be removed
 	free(temp_page);
 }
 
@@ -186,12 +184,14 @@ bool load_supptable_page(struct supptable_page *page_entry)
 			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_FILE\n");
 			result=load_page_file(page_entry);
 			break;
+		case MMF | SWAP:
 		case MMF:
 			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_MMF\n");
 			result=load_page_mmf(page_entry);
 			break;
+		case FILE | SWAP:
 		case SWAP:
-			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_SWAP");
+			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_SWAP\n");
 			result=load_page_swap(page_entry);
 			break;
 	}
@@ -222,11 +222,11 @@ static bool load_page_swap(struct supptable_page *page_entry)
 		return false;
 	}
 
-	swap_in_page(page_entry->swap_slot_id, page_entry->uvaddr);
-    if (page_entry->page_type == SWAP)
+	swap_in_page(page_entry->swap_slot_index, page_entry->uvaddr);
+    if (page_entry->page_type & SWAP)
     	hash_delete (&t->suppl_page_table, &page_entry->hash_index);
 
-	if (page_entry->page_type == (FILE | SWAP))
+	if (page_entry->page_type & (FILE | SWAP))
 	{
 		page_entry->page_type = FILE;
 		page_entry->is_page_loaded = true;
@@ -248,25 +248,27 @@ static bool load_page_file(struct supptable_page *page_entry)
 	struct thread *t=thread_current();
 	file_seek (page_entry->file, page_entry->offset);
 
-	DPRINT_PAGE("load_page_file:PAGE UVADDR:%ld\n",(long)page_entry->uvaddr);
-
+	DPRINT_PAGE("load_page_file:PAGE UVADDR:%x\n",(uint32_t)page_entry->uvaddr);
 	void *kpage;
 	kpage= allocateFrame(PAL_USER,page_entry->uvaddr);
+	DPRINT_PAGE("load_page_file:PAGE kpage:%x\n",kpage);
+
 	if (kpage == NULL)
 	{
 		DPRINTF_PAGE("load_page_file:FRAME ALLOC. FAILED\n");
 		return false;
 	}
 
-	if (file_read (page_entry->file, kpage,page_entry->read_bytes)!= (int)page_entry->read_bytes)
+	if (file_read(page_entry->file,kpage,page_entry->read_bytes)!= (int)page_entry->read_bytes)
 	{
+		DPRINTF_PAGE("load_page_file:FREE FRAME");
 		freeFrame(kpage);
 	    return false;
 	}
-
 	memset(kpage + page_entry->read_bytes, 0,page_entry->zero_bytes);
 	if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->writable))
 	{
+		DPRINTF_PAGE("load_page_file:FREE FRAME");
 		freeFrame (kpage);
 		return false;
 	}
@@ -291,7 +293,8 @@ static bool load_page_mmf (struct supptable_page *page_entry)
 	file_seek (page_entry->file, page_entry->offset);
 
 	void *kpage = allocateFrame (PAL_USER, page_entry->uvaddr);
-	if (kpage == NULL){
+	if (kpage == NULL)
+	{
 		DPRINTF_PAGE("Load Page MMF: false : couldn't allocate Frame\n");
 		return false;
 	}
@@ -304,12 +307,13 @@ static bool load_page_mmf (struct supptable_page *page_entry)
 	
 	memset (kpage + page_entry->read_bytes, 0, PGSIZE - page_entry->read_bytes);
 
-	if (!pagedir_set_page (cur->pagedir, page_entry->uvaddr, kpage, true)) {
+	if (!pagedir_set_page (cur->pagedir, page_entry->uvaddr, kpage, true))
+	{
 		freeFrame (kpage);
 		DPRINTF_PAGE("Load Page MMF: false : couldn't set pagedir entry\n");
 		return false; 
     }
-	// - ?
+
 	page_entry->is_page_loaded = true;
 	if (page_entry->page_type & SWAP)
 		page_entry->page_type = MMF;

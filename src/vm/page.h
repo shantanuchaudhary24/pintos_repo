@@ -28,7 +28,7 @@ struct supptable_page
 	bool is_page_loaded;				// whether page is loaded or not	
 
 	/* For Swapping purpose*/
-	size_t swap_slot_id;
+	size_t swap_slot_index;
 	bool swap_writable;
 };
 bool init_supptable(struct hash *table);

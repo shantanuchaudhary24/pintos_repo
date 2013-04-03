@@ -12,7 +12,7 @@
 /* Error code returned by swap_out_page function on failure*/
 #define SWAP_ERROR SIZE_MAX
 
-struct struct_swap
+struct swap_struct
 {
 	struct block *swap_disk;
 	struct bitmap *swap_table;

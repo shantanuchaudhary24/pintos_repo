@@ -4,8 +4,9 @@
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "vm/swap.h"
+#include "vm/debug.h"
 
-static struct struct_swap *swap_space;
+static struct swap_struct *swap_space;
 
 static struct lock swap_lock;
 
@@ -13,6 +14,7 @@ void init_swap_space(void);
 size_t swap_out_page(void *vaddr);
 void swap_in_page(size_t swap_slot,void *vaddr);
 void swap_clear_slot(size_t swap_slot);
+void destroy_swap_space(void);
 
 /* Initialize the swap space which consists
  * of the swap disk and swap table(bitmap structure).
@@ -25,7 +27,7 @@ void swap_clear_slot(size_t swap_slot);
 void init_swap_space(void)
 {
 	lock_init(&swap_lock);
-    swap_space=(struct struct_swap *)malloc(sizeof (struct struct_swap));
+    swap_space=(struct swap_struct *)malloc(sizeof (struct swap_struct));
 	swap_space->swap_disk=block_get_role(BLOCK_SWAP);
 
     if(swap_space->swap_disk==NULL)
@@ -35,11 +37,18 @@ void init_swap_space(void)
 	swap_space->swap_table=bitmap_create(bit_cnt);
 
 	if(swap_space->swap_table==NULL)
-        PANIC("SWAP TABLE CANNOT BE CREATED");
+        PANIC("SWAP TABLE COULD NOT BE CREATED");
     
 	bitmap_set_all(swap_space->swap_table,false);
 }
 
+/* Destroy the swap space by destroying the swap table.
+ * */
+void destroy_swap_space(void)
+{
+	bitmap_destroy(swap_space->swap_table);
+	free(swap_space);
+}
 
 /* Finds an empty slot in the swap table and write the page
  * represented by vaddr into the empty swap slot of the swap
@@ -51,7 +60,7 @@ size_t swap_out_page(void *vaddr)
     void* buffer;
     block_sector_t sector;
     lock_acquire(&swap_lock);
-    size_t swap_slot=bitmap_scan_and_flip(swap_space->swap_table,SWAP_TABLE_START,SWAP_TABLE_CNT,true);
+    size_t swap_slot=bitmap_scan(swap_space->swap_table,SWAP_TABLE_START,SWAP_TABLE_CNT,false);
     
     if (swap_slot==BITMAP_ERROR)
     {
@@ -66,6 +75,7 @@ size_t swap_out_page(void *vaddr)
         buffer=vaddr+counter*BLOCK_SECTOR_SIZE;
         block_write(swap_space->swap_disk,sector,buffer);
     }
+    bitmap_mark(swap_space->swap_table,swap_slot);
     lock_release(&swap_lock);
     return swap_slot;
 }
@@ -86,7 +96,7 @@ void swap_in_page(size_t swap_slot,void *vaddr)
 		buffer=vaddr+counter*BLOCK_SECTOR_SIZE;
 		block_read(swap_space->swap_disk,sector,buffer);
 	}
-	bitmap_flip(swap_space->swap_table,swap_slot);
+	bitmap_mark(swap_space->swap_table,swap_slot);
 	lock_release(&swap_lock);
 }
 
@@ -96,6 +106,13 @@ void swap_in_page(size_t swap_slot,void *vaddr)
 void swap_clear_slot(size_t swap_slot)
 {
 	lock_acquire(&swap_lock);
-	bitmap_flip(swap_space->swap_table,swap_slot);
+	if(bitmap_test(swap_space->swap_table,swap_slot)==true)
+	{
+		DPRINTF_SWAP("swap_clear_slot:SWAP SLOT CLEARED\n");
+		bitmap_reset(swap_space->swap_table,swap_slot);
+	}
+	else {
+		DPRINTF_SWAP("swap_clear_slot:SWAP SLOT ALREADY CLEAR\n");
+	}
 	lock_release(&swap_lock);
 }

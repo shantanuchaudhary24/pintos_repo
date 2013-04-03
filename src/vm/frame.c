@@ -25,7 +25,8 @@ static bool saveEvictedFrame(struct frameStruct *frame);
 static struct lock frameTableLock;
 static struct lock lockForEviction;
 
-void frameInit(void){
+void frameInit(void)
+{
 	list_init(&frameTable);
 	lock_init(&frameTableLock);
 	lock_init(&lockForEviction);
@@ -102,13 +103,17 @@ static struct frameStruct *findFrameForEviction(void){
 	struct frameStruct *frame = NULL;
 	struct frameStruct *temp;
 	struct list_elem *e;
-	
+	struct thread *t;
+	printf("Evicted frame:ENTER\n");
+
 	for((e = list_head(&frameTable)); e != list_tail(&frameTable); e = list_next(e))
 	{
 		temp = list_entry (e, struct frameStruct, listElement);
-
-		if(!pagedir_is_accessed(get_thread_by_tid(temp->tid)->pagedir, temp->page))
+		t=get_thread_by_tid(temp->tid);
+		printf("page in temp:%x frame in temp:%x\n",temp->page,temp->frame);
+		if(!pagedir_is_accessed(t->pagedir, temp->page))
 		{
+			printf("loop 1\n");
 			frame = temp;
 			list_remove(e);
 			list_push_back(&frameTable, e);
@@ -116,18 +121,23 @@ static struct frameStruct *findFrameForEviction(void){
 		}
 		else
 		{
-			pagedir_set_accessed(get_thread_by_tid(temp->tid)->pagedir, temp->page, false);
+			printf("loop 2\n");
+			pagedir_set_accessed(t->pagedir, temp->page, false);
 		}
+		printf("loop 3\n");
 	}
+	DPRINTF_FRAME("findFrameForEviction:RETURN SUCCESS");
 	return frame;
 }
 
-static bool saveEvictedFrame(struct frameStruct *frame){
+static bool saveEvictedFrame(struct frameStruct *frame)
+{
 	struct thread *t = get_thread_by_tid(frame->tid);
 	struct supptable_page *spte = get_supptable_page(&t->suppl_page_table, frame->page);
 	size_t swapSlotID = 0;
 
-	if(spte == NULL){
+	if(spte == NULL)
+	{
 		spte = calloc(1, sizeof(spte));
 		spte->uvaddr = frame->page;
 		spte->page_type = SWAP;
@@ -135,9 +145,10 @@ static bool saveEvictedFrame(struct frameStruct *frame){
 			return false;
 	}
 
-	if(pagedir_is_dirty(t->pagedir, spte->uvaddr) && spte->page_type == MMF)
+	if(pagedir_is_dirty(t->pagedir, spte->uvaddr) && (spte->page_type & MMF))
 		write_page_to_file(spte);
-	else if(pagedir_is_dirty (t->pagedir, spte->uvaddr) || (spte->page_type != FILE)){
+	else if(pagedir_is_dirty (t->pagedir, spte->uvaddr) || !(spte->page_type & FILE))
+	{
 		swapSlotID = swap_out_page(spte->uvaddr);
 		if(swapSlotID == SWAP_ERROR)
 			return false;
@@ -146,7 +157,7 @@ static bool saveEvictedFrame(struct frameStruct *frame){
 	}
 
 	memset(frame->frame, 0, PGSIZE);
-	spte->swap_slot_id = swapSlotID;
+	spte->swap_slot_index = swapSlotID;
 	spte->writable = PTE_W;
 	spte->is_page_loaded = false;
 	pagedir_clear_page(t->pagedir, spte->uvaddr);
@@ -185,10 +196,11 @@ static bool addFrameToTable(void *frame, void *page)
 
 //function to remove the specified frame form the frame Table
 
-static void removeFrameFromTable(void *frame){
+static void removeFrameFromTable(void *frame)
+{
 	struct list_elem *temp;
 	struct frameStruct *frameTableEntry;
-	
+
 	lock_acquire(&frameTableLock);
 	
 	temp = list_head(&frameTable);
