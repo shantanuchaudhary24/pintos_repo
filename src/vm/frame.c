@@ -105,8 +105,9 @@ static struct frameStruct *findFrameForEviction(void){
 	struct list_elem *e;
 	struct thread *t;
 	printf("Evicted frame:ENTER\n");
-
-	for((e = list_head(&frameTable)); e != list_tail(&frameTable); e = list_next(e))
+	e = list_head(&frameTable);
+	e = list_next(e);
+	for(; e != list_tail(&frameTable); e = list_next(e))
 	{
 		temp = list_entry (e, struct frameStruct, listElement);
 		t=get_thread_by_tid(temp->tid);
@@ -205,14 +206,13 @@ static void removeFrameFromTable(void *frame)
 	
 	temp = list_head(&frameTable);
 	
-	while(temp != list_tail(&frameTable)){
+	while((temp = list_next(temp)) != list_tail(&frameTable)){
 		frameTableEntry = list_entry(temp, struct frameStruct, listElement);
 		if(frameTableEntry->frame == frame){
 			list_remove(temp);
 			free(frameTableEntry);
 			break;
 		}
-		temp = list_next(temp);
 	}
 
 	lock_release(&frameTableLock);
@@ -227,13 +227,12 @@ static struct frameStruct *getFrameFromTable(void *frame)
 	
 	temp = list_head(&frameTable);
 	
-	while(temp != list_tail(&frameTable))
+	while((temp = list_next(temp)) != list_tail(&frameTable))
 	{
 		frameTableEntry = list_entry(temp, struct frameStruct, listElement);
 		if(frameTableEntry->frame == frame)
 			break;
 		frameTableEntry = NULL;
-		temp = list_next(temp);
 	}
 	lock_release(&frameTableLock);
 	return frameTableEntry;
