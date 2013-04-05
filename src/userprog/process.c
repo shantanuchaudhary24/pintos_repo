@@ -255,9 +255,8 @@ process_exit (void)
   zombie_with_dead_parent_cleanup();
 
   free_mmfiles(&cur->mmfiles);						// freeing the mmf table
-
   free_supptable(&cur->suppl_page_table); 			// freeing the supplementary table
-
+  removeEntriesFor(cur);
 
 
   /* Destroy the current process's page directory and switch back
