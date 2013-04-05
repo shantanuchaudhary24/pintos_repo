@@ -2,15 +2,14 @@
 //13018
 #include <inttypes.h>
 #include <stdio.h>
-#include "lib/debug.h"
 #include "userprog/gdt.h"
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "userprog/pagedir.h"
+#include "threads/vaddr.h"
 #include "userprog/syscall.h"
 #include "vm/page.h"
-#include "threads/vaddr.h"
 #include "vm/debug.h"
+#include "userprog/pagedir.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -93,20 +92,25 @@ kill (struct intr_frame *f)
     case SEL_UCSEG:
       /* User's code segment, so it's a user exception, as we
          expected.  Kill the user process.  */
-    	DPRINTF_EXCEP("kill:PROCESS KILLED\n");
-    	terminate_process();
-    	break;
+      thread_current()->exit_status=-1;
+      process_terminate();
+      break;
 
     case SEL_KCSEG:
-    {
-    	/* Kernel's code segment, which indicates a kernel bug.
+      /* Kernel's code segment, which indicates a kernel bug.
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
-    	 intr_dump_frame(f);
-    	 PANIC("Kernel bug-unexpected interrupt in kernel");
-    	break;
-    }
+        if((((uint32_t)f->eax-(uint32_t)f->eip)==2) || (((uint32_t)f->eax-(uint32_t)f->eip)==3))
+        {
+        	f->eip=(void *)f->eax;
+        	f->eax=(-1);
+        }else
+        {
+        	PANIC("UNEXPECTED BUG IN KERNEL");
+        }
+        break;
+        
     default:
       /* Some other code segment?  Shouldn't happen.  Panic the
          kernel. */
@@ -128,23 +132,11 @@ kill (struct intr_frame *f)
    can find more information about both of these in the
    description of "Interrupt 14--Page Fault Exception (#PF)" in
    [IA32-v3a] section 5.15 "Exception and Interrupt Reference". */
-/* Obtain faulting address, the virtual address that was
-   accessed to cause the fault.  It may point to code or to
-   data.  It is not necessarily the address of the instruction
-   that caused the fault (that's f->eip).
-   See [IA32-v2a] "MOV--Move to/from Control Registers" and
-   [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
-   (#PF)". */
-/* Turn interrupts back on (they were only off so that we could
-   be assured of reading CR2 before it changed). */
-/* Count page faults. */
-/* Determine cause of the page faults */
-/* Handle page faults(demand paging)*/
 static void
 page_fault (struct intr_frame *f) 
 {
   bool not_present;  /* True: not-present page, false: writing r/o page. */
-  bool write;        /* True: access was write, false: access was read. */
+  bool write UNUSED; /* True: access was write, false: access was read. */
   bool user UNUSED;  /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
   struct thread *t=thread_current();
@@ -159,11 +151,11 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
+  DPRINT_EXCEP("page_fault:not_present:%d\n",not_present);
+  DPRINT_EXCEP("page_fault:write:%d\n",write);
+  DPRINT_EXCEP("page_fault:user:%d\n",user);
 
-  DPRINT_EXCEP("not_present:%d\n",not_present);
-  DPRINT_EXCEP("write:%d\n",write);
-  DPRINT_EXCEP("user:%d\n",user);
-	  	  	  	  	  	  	  /*  PAGE FAULT HANDLING*/
+    	  	  	  	  	  	  /*  PAGE FAULT HANDLING*/
 
   switch(f->cs)
   {
@@ -176,35 +168,32 @@ page_fault (struct intr_frame *f)
   	   * in the page directory or terminate if it fails.
   	   * */
 	  case SEL_UCSEG:
-  	  {
   		  DPRINT_EXCEP("page_fault:UCSEG:fault_addr:%x\n",(uint32_t)fault_addr);
 
   		  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
   		  {
   			  DPRINTF_EXCEP("page_fault:UCSEG:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
-  			  terminate_process();
-  		  }
+  			  t->exit_status=-1;
+  			  process_terminate();
 
-  		  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
-  		  DPRINT_EXCEP("page_fault:UCSEG:Getting correct Entry Addr:%x\n",(uint32_t)page_entry->uvaddr);
-
-  		  if(page_entry!=NULL && !page_entry->is_page_loaded)
-  		  {
-  			  DPRINTF_EXCEP("page_fault:UCSEG:LOAD PAGE\n");
-  			  load_supptable_page(page_entry);
-  		  }
-  		  else if(page_entry==NULL && (int *)fault_addr>=(int *)(f->esp)-8 && pg_round_down(fault_addr)>=(PHYS_BASE-STACK_SIZE) && write)
-  		  {
-  			  DPRINTF_EXCEP("page_fault:UCSEG:GROW STACK\n");
-  			  grow_stack(fault_addr);
   		  }
   		  else
   		  {
-  			  DPRINTF_EXCEP("page_fault:PAGE UNMAPPED\n");
-  			  if(pagedir_get_page(t->pagedir, fault_addr)==NULL)
-  				  terminate_process();
+  			  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
+  			  DPRINT_EXCEP("page_fault:UCSEG:Getting correct Entry Addr:%x\n",(uint32_t)page_entry->uvaddr);
+  			  if(page_entry!=NULL && !page_entry->is_page_loaded)
+  			  {
+  				  DPRINTF_EXCEP("page_fault:UCSEG:LOAD PAGE\n");
+  				  load_supptable_page(page_entry);
+  			  }
+  			  else if(page_entry==NULL && ((int *)fault_addr>=(int *)(f->esp)-8) && (pg_round_down(f->esp)>=(PHYS_BASE-STACK_SIZE)))
+  			  {
+  				  DPRINTF_EXCEP("page_fault:UCSEG:GROW STACK\n");
+  				  grow_stack(fault_addr);
+  			  }
+  			  else kill(f);
   		  }
-  	  } break;
+  		  break;
 
   	  /* For kernel stack segment, we check for write violation,NULL address, address
   	   * less than PHYSBASE and saved stack pointer is in valid user virtual address space.
@@ -216,47 +205,30 @@ page_fault (struct intr_frame *f)
   	   * the final case we set the page in the page directory or terminate if it fails.
   	   * */
 	  case SEL_KCSEG:
-  	  {
   		  DPRINT_EXCEP("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
   		  DPRINT_EXCEP("page_fault:KERNEL t->stack addr:%x\n",(uint32_t)t->stack);
   		  DPRINT_EXCEP("is_user_vaddr(fault_addr):%d\n",is_user_vaddr(fault_addr));
   		  DPRINT_EXCEP("EIP is:%x\n",(void *)f->eip);
   		  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
   		  {
-  			  printf("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
-  			  printf("page_fault:KERNEL t->stack addr:%x\n",(uint32_t)t->stack);
-  			  printf("is_user_vaddr(fault_addr):%d\n",is_user_vaddr(fault_addr));
-  			  printf("EIP is:%x\n",(void *)f->eip);
-
-  			  DPRINTF_EXCEP("page_fault:KCSEG:WRITE VIOLATION/NULL/INVALID_USER_VADDR\n");
-  			  terminate_process();
-  		  }
-
-  		  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
-
-  		  if(page_entry!=NULL && !page_entry->is_page_loaded)
-  		  {
-  			  DPRINTF_EXCEP("page_fault:KCSEG:LOAD PAGE\n");
-  			  load_supptable_page(page_entry);
-  		  }
-  		  else if(page_entry == NULL && (int *)fault_addr>=(int *)(t->stack)-8)
-  		  {
-  			  DPRINTF_EXCEP("page_fault:KCSEG:GROW STACK\n");
-  			  grow_stack(fault_addr);
+  			  t->exit_status=-1;
+  			  process_terminate();
   		  }
   		  else
   		  {
-  			  if(pagedir_get_page(t->pagedir, fault_addr)==NULL)
+  			  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
+  			  if(page_entry!=NULL && !page_entry->is_page_loaded)
   			  {
-  				  DPRINTF_EXCEP("page_fault:KCSEG:PAGE UNMAPPED\n");
-  				  terminate_process();
+  				  DPRINTF_EXCEP("page_fault:KCSEG:LOAD PAGE\n");
+  				  load_supptable_page(page_entry);
   			  }
-  			  else
+  			  else if(page_entry == NULL && ((int *)fault_addr>=((int *)(t->stack))-8) && (pg_round_down(t->stack)>=(PHYS_BASE-STACK_SIZE)))
   			  {
-  				  DPRINTF_EXCEP("page_fault:KCSEG:KERNEL BUG\n");
-  				  kill(f);
+  				  DPRINTF_EXCEP("page_fault:KCSEG:GROW STACK\n");
+  				  grow_stack(fault_addr);
   			  }
-  		  }
-  	  } break;
+  			  else kill(f);
+  		  }break;
   	}
+  //kill(f);
 }

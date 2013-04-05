@@ -1,11 +1,22 @@
 #include "userprog/mmf.h"
+#include "userprog/syscall.h"
+#include "threads/thread.h"
+#include "lib/user/syscall.h"
 #include "vm/page.h"
 #include "threads/malloc.h"
 #include "threads/pte.h"
 #include "vm/debug.h"
 #include "userprog/pagedir.h"
+#include "filesys/file.h"
 
-static void free_mmfiles_entry (struct hash_elem *e, void *aux UNUSED);
+extern struct lock filesys_lock;
+
+static void mmfiles_free_entry (struct mmfStruct* mmfile);
+static unsigned mmfile_hash (const struct hash_elem *a, void *aux UNUSED);
+static bool mmfile_less (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED);
+static unsigned mmfile_hash (const struct hash_elem *a, void *aux UNUSED);
+static void free_mmfiles_entry (struct hash_elem *e,void *aux UNUSED);
+
 
 bool mmfiles_init(struct hash *mmfiles){
 	return hash_init (mmfiles, mmfile_hash, mmfile_less, NULL);
@@ -66,29 +77,29 @@ void mmfiles_free_entry (struct mmfStruct* mmfile){
 			spte_ptr = hash_entry (hashElement, struct supptable_page, hash_index);
 		
 			if(spte_ptr->is_page_loaded && pagedir_is_dirty(t->pagedir, spte_ptr->uvaddr)) {
-				lock_acquire(&fileLock);
+				lock_acquire(&filesys_lock);
 				file_seek(spte_ptr->file, spte_ptr->offset);
 				file_write(spte_ptr->file, spte_ptr->uvaddr, spte_ptr->read_bytes);
-				lock_release(&fileLock);
+				lock_release(&filesys_lock);
 			}
 			free (spte_ptr);
 		}
 	}
 	DPRINTF_MMF("mmfiles_free_entry: before close file\n");
-	lock_acquire (&fileLock);
+	lock_acquire (&filesys_lock);
 	file_close (mmfile->file);
-	lock_release (&fileLock);
+	lock_release (&filesys_lock);
 
 	free (mmfile);
 }
 
-unsigned mmfile_hash (const struct hash_elem *a, void *aux UNUSED) {
+static unsigned mmfile_hash (const struct hash_elem *a, void *aux UNUSED) {
   const struct mmfStruct *b = hash_entry (a, struct mmfStruct, Element);
   return hash_bytes (&b->mapid, sizeof(b->mapid));
 }
 
 
-bool mmfile_less (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
+static bool mmfile_less (const struct hash_elem *a, const struct hash_elem *b, void *aux UNUSED) {
   const struct mmfStruct *x = hash_entry (a, struct mmfStruct, Element);
   const struct mmfStruct *y = hash_entry (b, struct mmfStruct, Element);
 
@@ -96,10 +107,10 @@ bool mmfile_less (const struct hash_elem *a, const struct hash_elem *b, void *au
 }
 
 void free_mmfiles (struct hash *mmfiles){
-  hash_destroy (mmfiles, free_mmfiles_entry);
+  hash_destroy(mmfiles,free_mmfiles_entry);
 }
 
-static void free_mmfiles_entry (struct hash_elem *e, void *aux UNUSED) {
+static void free_mmfiles_entry (struct hash_elem *e,void *aux UNUSED) {
   struct mmfStruct *mmf;
   mmf = hash_entry (e, struct mmfStruct, Element);
   mmfiles_free_entry (mmf);

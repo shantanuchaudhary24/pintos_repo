@@ -1,535 +1,404 @@
-#include "userprog/mmf.h"
+#include "userprog/syscall.h"
 //14406
 #include <stdio.h>
-#include <syscall-nr.h>				// reference to library to get interrupt numbers
-#include "threads/interrupt.h"		// reference to library for intr_frame 
-#include "threads/thread.h"			
-#include "lib/syscall-nr.h"
 #include "lib/stdio.h"
-#include "threads/vaddr.h"
+#include <syscall-nr.h>
+#include "threads/interrupt.h"
+#include "threads/synch.h"
 #include "threads/init.h"
-#include "userprog/process.h"
-#include <list.h>
+#include "threads/vaddr.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
-#include "threads/palloc.h"
-#include "threads/malloc.h"
+#include "process.h"
+#include "pagedir.h"
 #include "devices/input.h"
-#include "threads/synch.h"
-#include "userprog/pagedir.h"
 #include "vm/debug.h"
+#include "userprog/mmf.h"
 #include "vm/page.h"
 
-// Structure for the elements in the file desciptor table
-struct fd_elements {
-	int fd;
-	struct file *File;
-	struct list_elem elem;
-	struct list_elem thread_elem;
-};
+extern struct lock filesys_lock;
 
-// Variable declaration for list of opened files (fd table)
-static struct list fileList; 
-
-// function for finding a file from the fd table given a fd
-static struct file *findFile (int fd);
-
-// function for finding a element of fd list given a fd
-static struct fd_elements *findFdElem (int fd);
-
-// function for allocating a new file descriptor for an newly opened file
-static int alloc_fid (void);
-
-// function for finding a file element in the list of opened files for current thread
-static struct fd_elements *findFdElemProcess (int fd);
-
-// function for handling the system calls
 static void syscall_handler (struct intr_frame *);
-
-// function for handling the write system call
-static int write (int fd, void *buffer, unsigned size);
-
-// function for handling the halt system call
-static void halt (void);
-
-// function for handling the create system call
-static bool create (char *file, unsigned initial_size);
-
-// function for handling the open system call
-static int open (char *file);
-
-// function for handling the close system call
-static void close (int fd);
-
-// function for handling the read system call
-static int read (int fd, void *buffer, unsigned size);
-
-// function for handling the exec system call
-static pid_t exec (char *cmd_line);
-
-// function for handling the wait system call
-static int wait (pid_t pid);
-
-// function for handling the filesize system call
-static int filesize (int fd);
-
-// function for handling the tell system call
-static unsigned tell (int fd);
-
-// function for handling the seek system call
-static void seek (int fd, unsigned position);
-
-// function for handling the remove system call
-static bool remove (char *file);
-
-// function for handling the exit system call
-static void exit (int status);
-
-static mapid_t mmap (int, void *);
-static void munmap (mapid_t);
-
-
-// functions for checking the user memory access,strings,buffer address
-static int string_check_terminate(char* str);
-
-
-static void buffer_check_terminate(void *buffer, unsigned size);
 static int get_valid_val(int *uaddr);
+static bool put_valid_val(int *uaddr,int size);
 static int get_user (const int *uaddr);
-void terminate_process(void);
+static bool put_user (int *udst, int byte);
+static void buffer_check_terminate(void *buffer, unsigned size);
+static void buffer_check_write(void *buffer,unsigned size);
+static void string_check_terminate(char* str);
+static void stack_address_check(void* esp);
 
-void syscall_init (void) {
-	intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 
-	//initializing the file desciptor list
-	list_init(&fileList);
-
-	//initializing the file lock list
-	lock_init(&fileLock);
-	
-}
-
-// System call handler
-/* The function gets the system call number using the stack pointer stored
- * in the interrupt frame. First checking if the user is allowed to access
- * this memory location (using get_valid_val()).Then we check if the system 
- * call number is out of range. If so, we exit(-1). Now, corresponding to 
- * each system call, we call the corresponding handler with its arguments.
- * */
-static void syscall_handler (struct intr_frame *f /*UNUSED*/)
+void syscall_init (void)
 {
-	struct thread *t = thread_current();
-	int *p;
-	unsigned ret = 0;
-    int arg1 = 0, arg2 = 0, arg3 = 0;
-    if (get_valid_val(f->esp)== -1)
-    			exit(-1);
-    p = f->esp;
-	t->stack = f->esp ;				/* Saving stack pointer (needed to handle kernel page fault) */
-	if (*p < SYS_HALT || *p > SYS_MUNMAP)
-		exit(-1);
-	switch(*p)
-	{
-		case SYS_HALT :
-			DPRINTF_SYS("SYS_HALT\n");
-			halt();					  
-			break;
-		case SYS_CLOSE : 
-			DPRINTF_SYS("SYS_CLOSE\n");
-			arg1=get_valid_val((p + 1));
-			if (arg1==(-1))
-				exit(-1);						  
-			close(arg1); 
-			break;
-		case SYS_CREATE : 
-			DPRINTF_SYS("SYS_CREATE\n");
-			arg1=get_valid_val(p+1);
-			arg2=get_valid_val(p+2);
-			if (arg1==(-1) || arg2==(-1))
-				exit(-1);						  
-			ret = (unsigned)create((char*)arg1, (unsigned)arg2);
-			f->eax = ret; 
-			break;
-		case SYS_EXEC : 
-			DPRINTF_SYS("SYS_EXEC\n");
-			arg1=get_valid_val(p+1);
-			if (arg1==(-1))
-			{
-				DPRINTF_SYS("SYS_EXEC:INVALID ACCESS");
-				exit(-1);						  
-			}
-			ret = (unsigned)exec((char*)arg1);
-			f->eax = ret; 
-			break;
-		case SYS_EXIT : 
-			DPRINTF_SYS("SYS_EXIT\n");
-			arg1=get_valid_val(p+1);
-			if (arg1==(-1))
-				exit(-1);					  
-			exit(arg1);
-			break;
-		case SYS_FILESIZE : 
-			DPRINTF_SYS("SYS_FILESIZE\n");
-			arg1=get_valid_val(p+1);
-			if (arg1==(-1))
-				exit(-1);						  
-			ret = (unsigned)filesize(arg1);
-			f->eax = ret; 
-			break;
-		case SYS_OPEN : 
-			DPRINTF_SYS("SYS_OPEN\n");
-			arg1=get_valid_val(p+1);
-			if (arg1==(-1))
-				exit(-1);						  
-			ret = (unsigned)open((char*)(arg1));
-			f->eax = ret; 
-			break;
-		case SYS_WAIT :
-			DPRINTF_SYS("SYS_WAIT\n");
-			arg1=get_valid_val(p+1);
-			if (arg1==(-1))
-				exit(-1);						  
-			ret = (unsigned)wait((pid_t)arg1);
-			f->eax = ret; 
-			break;
-		case SYS_REMOVE : 
-			DPRINTF_SYS("SYS_REMOVE\n");
-			arg1=get_valid_val(p+1);
-			if (arg1==(-1))
-				exit(-1);						  
-			ret = (unsigned)remove((char*)arg1);
-			f->eax = ret; 
-			break;
-		case SYS_READ :
-			DPRINTF_SYS("SYS_READ\n");
-			arg1=get_valid_val(p+1);
-			arg2=get_valid_val(p+2);
-			arg3=get_valid_val(p+3);
-			if (arg1==(-1) || arg2==(-1) || arg3==(-1))
-			{
-				DPRINTF_SYS("SYS_READ:ARG FAIL\n");
-				exit(-1);						  
-			}
-			ret = (unsigned)read(arg1, (void*)arg2, (unsigned)arg3);
-			f->eax = ret; 
-			break;
-		case SYS_WRITE : 
-			DPRINTF_SYS("SYS_WRITE\n");
-			arg1=get_valid_val(p+1);
-			arg2=get_valid_val(p+2);
-			arg3=get_valid_val(p+3);
-			if (arg1==(-1) || arg2==(-1) || arg3==(-1))
-				exit(-1);						  
-			ret = (unsigned)write(arg1, (void *)arg2, (unsigned)arg3);
-			f->eax = ret; 
-			break;
-		case SYS_SEEK :  
-			DPRINTF_SYS("SYS_SEEK\n");
-			arg1=get_valid_val(p+1);
-			arg2=get_valid_val(p+2);
-			if (arg1==(-1) || arg2==(-1))
-				exit(-1);						  
-			seek(arg1, (unsigned)arg2);
-			break; 
-		case SYS_TELL :  
-			DPRINTF_SYS("SYS_TELL\n");
-			arg1=get_valid_val(p+1);
-			if (arg1==(-1))
-				exit(-1);						  
-			ret = (unsigned)tell(arg1);
-			f->eax = ret; 
-			break;
-		case SYS_MMAP :
-			DPRINTF_SYS("SYS_MMAP\n");
-			arg1 = get_valid_val(p+1);
-			arg2 = get_valid_val(p+2);
-			if(arg1==-1 || arg2 == -1)
-				exit(-1);
-			ret = (unsigned)mmap(arg1, (void *)arg2);
-			f->eax = ret;
-			break;
-		case SYS_MUNMAP:
-			DPRINTF_SYS("SYS_MUNMAP\n");
-			arg1 = get_valid_val(p+1);
-			if(arg1==-1)
-				exit(-1);
-			munmap(arg1);
-			break;
-		default:
-			thread_exit();
-			break;
-	}
-return;
+  intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
-
-/* Gets the current thread.Closes all the files opened in this thread.
- * Puts exit status in the return status of the thread for future reference
- * Exits the thread. 
- * */
-static void exit(int status)
+static void syscall_handler (struct intr_frame *f)
 {
-	struct thread *t;
-	struct list_elem *l;
-	DPRINTF_SYS("exit : begin\n");
-	t = thread_current ();   
-	while(!list_empty(&t->files))
-	{
-		l = list_begin(&t->files);
-		close(list_entry(l, struct fd_elements, thread_elem)->fd);
-	}
-	t->ret_status = status;
-	thread_exit ();
-	DPRINTF_SYS("exit : end\n");
-	return;
+  int *arg;
+  if(f)
+  {
+    stack_address_check(f->esp);
+    arg=f->esp;
+    thread_current()->stack=f->esp;
+    // get sys call number off the stack
+    int sys_call_no = get_valid_val(arg);
+    if(sys_call_no== -1 || sys_call_no<SYS_HALT || sys_call_no>SYS_MUNMAP)
+        {
+            thread_current()->exit_status=-1;
+            process_terminate();
+        }
+    switch(sys_call_no)
+    {
+      case SYS_HALT:
+    	  DPRINTF_SYS("SYS_HALT\n");
+    	  power_off();
+    	  break;
+      case SYS_EXIT:
+        {
+        	DPRINTF_SYS("SYS_EXIT\n");
+        	int status = get_valid_val(arg+1);
+        	thread_current()->exit_status = status;
+        	process_terminate();
+        	return;
+        }
+        break;
+      case SYS_EXEC:
+        {
+        	DPRINTF_SYS("SYS_EXEC\n");
+        	char* file_name = (char *)get_valid_val(arg+1);
+        	string_check_terminate(file_name);
+        	int tid = sys_exec(file_name);
+        	f->eax = tid;
+        }
+        return;
+      case SYS_WAIT:
+        {
+        	DPRINTF_SYS("SYS_WAIT\n");
+        	int pid = get_valid_val(arg+1);
+        	int ret = process_wait(pid);
+        	f->eax = ret;
+        }
+        return;
+      case SYS_CREATE:
+        {
+        	DPRINTF_SYS("SYS_CREATE\n");
+        	char* file_name = (char *)get_valid_val(arg+1);
+        	string_check_terminate(file_name);
+        	int size = get_valid_val(arg+2);
+        	f->eax = sys_create(file_name, size);
+        }
+        return;
+      case SYS_REMOVE:
+        {
+        	DPRINTF_SYS("SYS_REMOVE\n");
+        	char* file_name = (char*)get_valid_val(arg+1);
+        	string_check_terminate(file_name);
+        	f->eax = sys_remove(file_name);
+        }
+        return;
+      case SYS_OPEN:
+        {
+        	DPRINTF_SYS("SYS_OPEN\n");
+        	char* file_name = (char*)get_valid_val(arg+1);
+        	string_check_terminate(file_name);
+        	f->eax = sys_open(file_name);
+        }
+        return; 
+      case SYS_FILESIZE:
+        {
+        	DPRINTF_SYS("SYS_FILESIZE\n");
+        	int fd = get_valid_val(arg+1);
+        	f->eax = sys_filesize(fd);
+        }
+        return;
+      case SYS_READ:
+        {
+        	DPRINTF_SYS("SYS_READ\n");
+        	int fd = get_valid_val(arg+1);
+        	char* buf = (char*)get_valid_val(arg+2);
+        	int size = get_valid_val(arg+3);
+        	buffer_check_write(buf, size);
+        	f->eax = sys_read(fd, buf, size);
+        }
+        return;
+      case SYS_WRITE:
+        {
+        	DPRINTF_SYS("SYS_WRITE\n");
+        	int fd = get_valid_val(arg+1);
+        	char* buf = (char*)get_valid_val(arg+2);
+        	int size = get_valid_val(arg+3);
+        	buffer_check_terminate(buf, size);
+        	f->eax = sys_write(fd, buf, size);
+        }
+        return;
+      case SYS_SEEK:
+        {
+        	DPRINTF_SYS("SYS_SEEK");
+        	int fd = get_valid_val(arg+1);
+        	unsigned pos = (unsigned)get_valid_val(arg+2);
+        	sys_seek(fd, pos);
+        }
+        return;
+      case SYS_TELL:
+        {
+        	DPRINTF_SYS("SYS_TELL");
+        	int fd = get_valid_val(arg+1);
+        	f->eax = sys_tell(fd);
+        }
+        return;
+      case SYS_CLOSE:
+        {
+        	DPRINTF_SYS("SYS_CLOSE");
+        	int fd = get_valid_val(arg+1);
+        	sys_close(fd);
+        }
+        return;
+      case SYS_MMAP:
+      {
+    	  DPRINTF_SYS("SYS_MMAP");
+    	  int fd=get_valid_val(arg+1);
+    	  void *addr=(void *)get_valid_val(arg+2);
+    	  f->eax=(unsigned)mmap(fd,addr);
+      }
+      return;
+      case SYS_MUNMAP:
+      {
+    	  DPRINTF_SYS("SYS_MUNMAP");
+    	  mapid_t mapping=(mapid_t)get_valid_val(arg+1);
+    	  munmap(mapping);
+      }
+      return;
+    	  /*
+      case SYS_CHDIR:
+      case SYS_MKDIR:
+      case SYS_READDIR:
+      case SYS_ISDIR:
+      case SYS_INUMBER:
+      */
+      default:
+        thread_exit();
+        break;
+    }
+  }
+  else
+    thread_exit();
 }
 
-/* If the given file descriptor is '0',acquire lock, get input 
- * from the console and then release lock.// if fd is 1, then 
- * do nothing as we can't read from stdout just return -1.
- * If the memory location pointed to by buffer is not user accessible
- * then exit, else, acquire the lock, check get the file corresponding 
- * to the fd write to file and then release lock.
- * In case there is no file corresponding to the fd given, exit(-1)
- * */
-static int read (int fd, void *buffer, unsigned size)
+// check if the stack is valid
+static void stack_address_check(void* esp)
 {
-	struct file *File;
-	int ret = -1;
-	unsigned i;
-	
-	buffer_check_terminate(buffer,size);
-
-	if(fd == 0)
-	{
-		lock_acquire(&fileLock);
-		for (i = 0; i < size; i++)
-			*(uint8_t *)(buffer + i) = input_getc ();
-		ret = size;
-		lock_release(&fileLock);
-	}
-	else if (fd == 1)
-		ret = -1;
-	else
-	{
-		lock_acquire(&fileLock);
-		File = findFile(fd);
-		if(!File){
-			lock_release(&fileLock);
-			return -1;
-		}
-		ret = file_read(File, buffer, size);
-		lock_release(&fileLock);
-	}
-	return ret;	
+  if(esp==NULL || !is_user_vaddr(esp))
+  {
+      thread_current()->exit_status = -1;
+      process_terminate();
+  }
 }
 
-/* If the file name is null,it returns -1.If the file name
- * is not user accessible exit(-1). If not any of those things,
- * opens the file. If there is a problem in opening, returns -1.
- * It then allocates memory for storing details about the opened
- * file in fd table. If there is problem in allocating memory,
- * it closes the file and returns -1. It the specifies all the
- * details in the structure.Allocates a new fd for the opened file,
- * pushes fd_elements->elem in the list,
- * pushes this file into the list of open files for the current thread
- * */
-static int open (char *File)
+// prints the exit code and terminates the process
+void process_terminate(void)
 {
-	struct file *F;
-	struct fd_elements *FDE;
-	int ret = -1;
-	if (!File)
-		return ret;
-	
-	string_check_terminate(File);
-	F = filesys_open (File);
-	
-	if (!F)
-		return ret;
-	FDE = (struct fd_elements *)malloc(sizeof(struct fd_elements));
-	
-	if (!FDE)
-	{
-		free (FDE);
-		file_close (F);
-		return ret;
-	}
-	
-	FDE->File = F;
-	FDE->fd = alloc_fid ();
-	list_push_back (&fileList, &FDE->elem);
-	list_push_back (&thread_current ()->files, &FDE->thread_elem);
-	ret = FDE->fd;
-	return ret;
+  struct thread *t = thread_current ();
+  printf ("%s: exit(%d)\n", t->name, t->exit_status);  
+  thread_exit();
 }
 
-/* Find fd element for the given fd out of the list of files
- * opened in this thread. If not found, return, else close 
- * the file and remove it from the list. At last free the
- * memory occupied by this element.
- * */
-static void close (int fd){
-	
-	struct fd_elements *f;
-	f = findFdElemProcess (fd);
-	if (!f)
-		return;
-	file_close (f->File);
-	list_remove (&f->elem);
-	list_remove (&f->thread_elem);
-	free (f);
-}
 
-/* If the location at which cmd_line is stored is not user accessible,
- * exit(-1). If cmd name(cmd_line) is null, return -1. If none, acquire
- * lock, execute the command, then release the lock and return the status
- * returned by process_execute.
- * */
-static pid_t exec (char *cmd_line){
-	
-	int ret = -1;
-	if (!cmd_line)
-		return ret;
-	DPRINT_SYS("exec:%s\n",cmd_line);
-	string_check_terminate(cmd_line);
-	lock_acquire(&fileLock);
-	ret = process_execute(cmd_line);
-	lock_release(&fileLock);
-	DPRINTF_SYS("exec : process_execute completed\n");
-	return ret;
-}
-
-/* If there is no thread by the given pid, then exit(-1)
- * else return call process_wait with this pid
- * */
-static int wait (pid_t pid)
+int sys_exec(char* filename)
 {
-	if(!get_thread_by_tid(pid))
-	{
-		DPRINTF_SYS("wait : exit(-1)\n");
-		exit(-1);
-	}
-	return process_wait(pid);
+  tid_t tid = process_execute(filename);
+  if(tid == -1) // process execute failed, return -1
+    return -1;
+  else  // tid is valid
+  {
+    intr_disable();
+    thread_block(); // block myself, until child wakes me up 
+                    // with the exec_status, telling me if the elf load was successful
+    intr_enable();
+
+    struct thread* child = get_thread_from_tid(tid);
+   
+    if(child)
+    {
+      // exec_status will be -1 if load failed, hence we return -1
+      // in such case
+      tid = child->exec_status;
+      child->parent_waiting_exec = 0;
+      // child had blocked itself, unblock it
+      thread_unblock(child);
+    }
+    return tid;
+  }
 }
 
-/* Finds file in the list of opened files.
- * If there is no file by that fd, returns -1
- * else it calls file_length to find the size of the given file.
- * */
-static int filesize (int fd){
-	struct file *File;
-	File = findFile (fd);
-	if (!File)
-		return -1;
-	return file_length(File);
-}
-
-/* Finds the file with the given fd.
- * If there is no file by that fd, it returns -1
- * else it calls file_tell to find the write offset for that file.
- * */
-static unsigned tell (int fd){
-	struct file *File;
-	File = findFile (fd);
-	if (!File)
-		return -1;
-	return file_tell (File);
-}
-
-/* Finds the file with the given fd.
- * If there is no file by that fd, it returns -1 else it calls
- * file_seek to find the change in the write offset for that file
- * */
-static void seek (int fd, unsigned position){
-	struct file *File;
-	File = findFile (fd);
-	if (!File)
-		return;
-	file_seek (File, position);
-	return;
-}
-
-/* Just calls power_off, which never returns.
- * */
-static void halt (void){
-	power_off();
-	NOT_REACHED();
-}
-
-/* If the memory address of buffer to buffer+size is not user accessible,
- * call exit(-1).  If the given fd is of the stdin, just return -1, 
- * because we can't write to stdin. If the given fd is of stdout, acquire lock,
- * write buffer on the console, and then release the lock.In every other case,
- * acquire the lock, find the file for the given fd, write to that file
- * and then release the lock. In case the file is not present in the list,
- * i.e. there is no file with the given fd, then release the lock and return -1;
- * Write to the file and release the lock and return the number of bytes written.
- * */
-static int write (int fd,void *buffer, unsigned size)
+int sys_open(char* file_name)
 {
-	struct file *File;
-	int ret = -1;
-	buffer_check_terminate(buffer,size);
-
-	if (fd == STDIN_FILENO)
-		ret = -1;
-	else if(fd == STDOUT_FILENO){
-		lock_acquire(&fileLock);
-		putbuf(buffer, size);
-		lock_release(&fileLock);
-	}
-	else
-	{
-		lock_acquire(&fileLock);
-		File = findFile(fd);
-		if(!File)
-		{ 
-			lock_release(&fileLock);
-			return -1;
-		}
-		ret = file_write(File, buffer, size);
-		lock_release(&fileLock);
-	}
-	return ret;	
+  if(!*file_name)  // empty string check
+    return -1;
+  struct thread *t = thread_current ();
+  int i = 2;
+  for(; i < FDTABLESIZE; ++i) // find the first free FD
+  {
+    if(!t->fd_table[i])
+    {
+      lock_acquire(&filesys_lock);
+      struct file* fi = filesys_open(file_name);
+      if(fi)
+        t->fd_table[i] = fi;
+      lock_release(&filesys_lock);
+      if(fi)
+        return i;
+      else
+        return -1;
+    }
+  }
+  return -1;
 }
 
-/* If either the file is NULL or the memory location at which
- * it is stored is not user accessible, then exit(-1)else 
- * just call filesys_create with the given file name and file size.
- * */
-static bool create (char *file, unsigned initial_size)
+int sys_create(char* file_name, int size)
 {
-	string_check_terminate((void *)file);
-	return filesys_create (file, initial_size);
+  int ret;
+  if(!*file_name)  // empty string check
+    return 0;
+  lock_acquire(&filesys_lock);
+  ret = filesys_create(file_name, size);
+  lock_release(&filesys_lock);
+  return ret;
 }
 
-/* If file is NULL, then return false
- * If the memory location is not user accessible, then call exit(-1)
- * Otherwise return filesys_remove with the given file name
- * */
-static bool remove (char *file)
+int sys_remove(char* file_name)
 {
-	string_check_terminate(file);
-	if(!file)
-		return false;
-	return filesys_remove(file);
+  int ret;
+  if(!*file_name)  // empty string check
+    return 0;
+  lock_acquire(&filesys_lock);
+  ret = filesys_remove(file_name);
+  lock_release(&filesys_lock);
+  return ret;
 }
 
-/* Function for allocating new fid to an open file.
- * Initial value of fd is 2 which means no file can have
- * a fd less than 2.Now we search for files in the list
- * with the given fid.
- * */
-static int alloc_fid(void)
+void sys_close(int fd)
 {
-	int fid = 2;
-	while(findFdElem(fid)!=NULL)
-		fid++;
-	return fid;
+  if(fd >= 0 && fd < FDTABLESIZE) // is valid FD?
+  {
+    struct thread *t = thread_current ();
+    struct file* fi = t->fd_table[fd];
+    if(fi)
+    {
+      lock_acquire(&filesys_lock);
+      file_close(fi);
+      lock_release(&filesys_lock);
+      t->fd_table[fd] = 0;
+    }
+  }
 }
 
-static mapid_t mmap (int fd, void *addr)
+int sys_write(int fd, void *buffer, unsigned size)
+{
+  if(fd == STDIN_FILENO)
+    return 0;
+  else if(fd == STDOUT_FILENO)
+  {
+    putbuf(buffer, size);
+    return size;
+  }
+  else if(fd < FDTABLESIZE && fd > 1)
+  {
+    struct thread* cur = thread_current ();
+    struct file* fi = cur->fd_table[fd];
+    if(fi)
+    {
+      int ret;
+      lock_acquire(&filesys_lock);
+      ret = file_write(fi, buffer, size);
+      lock_release(&filesys_lock);
+      return ret;
+    }
+  }
+  return 0;
+}
+
+int sys_read(int fd, void* buffer, unsigned size)
+{
+  if(fd == STDOUT_FILENO)
+    return 0;
+  else if(fd == STDIN_FILENO)
+  {
+    unsigned i = 0;
+    char* buf = (char*) buffer;
+    for(; i < size; ++i)
+      buf[i] = input_getc();
+    return 0;
+  }
+  else if(fd < FDTABLESIZE && fd > 1)
+  {
+    struct thread *cur = thread_current ();
+    struct file* fi = cur->fd_table[fd];
+    if(fi)
+    {
+      int ret;
+      lock_acquire(&filesys_lock);
+      ret = file_read(fi, buffer, size);
+      lock_release(&filesys_lock);
+      return ret;
+    }
+  }
+  return 0;
+}
+
+int sys_filesize(int fd)
+{
+  if(fd >= 0 && fd < FDTABLESIZE)
+  {
+    struct thread *t = thread_current ();
+    struct file* fi = t->fd_table[fd];
+    if(fi)
+    {
+      int ret;
+      lock_acquire(&filesys_lock);
+      ret = file_length(fi);
+      lock_release(&filesys_lock);
+      return ret;
+    }
+  }
+  return -1;
+}
+
+void sys_seek(int fd, unsigned pos)
+{
+  if(fd >= 0 && fd < FDTABLESIZE)
+  {
+    struct thread *t = thread_current ();
+    struct file* fi = t->fd_table[fd];
+    if(fi)
+    {
+      lock_acquire(&filesys_lock);
+      file_seek(fi, pos);
+      lock_release(&filesys_lock);
+    }
+  }
+}
+
+unsigned sys_tell(int fd)
+{
+  if(fd >= 0 && fd < FDTABLESIZE)
+  {
+    struct thread *t = thread_current ();
+    struct file* fi = t->fd_table[fd];
+    if(fi)
+    {
+      unsigned ret;
+      lock_acquire(&filesys_lock);
+      ret = file_tell(fi);
+      lock_release(&filesys_lock);
+      return ret;
+    }
+  }
+  return -1;
+}
+
+mapid_t mmap (int fd, void *addr)
 {
 	DPRINTF_SYS("entered syscall mmap\n");
 	struct file *fileStruct;
@@ -537,26 +406,26 @@ static mapid_t mmap (int fd, void *addr)
 	struct thread *t = thread_current();
 	int length = 0;
 	int i = 0;
-	
+
 	if(fd < 2)
 		return -1;
-	
+
 	if(addr == NULL || addr == 0x0 || pg_ofs(addr) != 0)
 		return -1;
-		
-	if((fileStruct = findFile(fd)) == NULL)
-		return -1;
-	
+	if(fd >= 0 && fd < FDTABLESIZE)
+		fileStruct = thread_current()->fd_table[fd];
+	else return -1;
+
 	if((length = file_length(fileStruct)) <= 0)
 		return -1;
-	
+
 	for(i = 0; i < length; i+=PGSIZE)
 		if(get_supptable_page(&t->suppl_page_table, addr + i) || pagedir_get_page(t->pagedir, addr + i))
 			return -1;
-	lock_acquire(&fileLock);
+	lock_acquire(&filesys_lock);
 	reopenedFile = file_reopen(fileStruct);
-	lock_release(&fileLock);
-	
+	lock_release(&filesys_lock);
+
 	if(reopenedFile == NULL)
 		return -1;
 	// call insert mmfiles function (to be created in process.c)
@@ -565,62 +434,16 @@ static mapid_t mmap (int fd, void *addr)
 	return x;
 }
 
-static void munmap (mapid_t mapping){
+void munmap (mapid_t mapping)
+{
 	DPRINTF_SYS("In Syscall MUNMAP\n");
 	mmfiles_remove (mapping);
 	DPRINTF_SYS("Completed Syscall MUNMAP\n");
 }
 
-/* Function for finding the file in a fd list given a fd.
- * Starts by finding the fd element in the list for the given fd
- * and returns the file associated with it.
- * */
-static struct file * findFile (int fd)
-{
-	struct fd_elements *ret;
-	ret = findFdElem (fd);
-	if (!ret)
-		return NULL;
-	return ret->File;
-}
 
-/* Function for finding the fd element in the fd list given a fd.
- * Scans the list and compare the fd of the element in the list
- * with the fd given and in case it maches, returns that fd element
- * If there is no such fd element, return null.
- * */
-static struct fd_elements *findFdElem (int fd)
-{
-	struct fd_elements *ret;
-	struct list_elem *l;
-	for (l = list_begin (&fileList); l != list_end (&fileList); l = list_next (l))
-	{
-		ret = list_entry (l, struct fd_elements, elem);
-		if (ret->fd == fd)
-			return ret;
-	}
-	return NULL;
-}
 
-/* This function finds the element for a given fd in in the list
- * of opened files for a given thread. It gets the current thread.
- * Scans the list and compare the fd of the element in the list with
- * the fd given and in case it maches, it returns that fd element.
- * If there is no such fd element, it returns NULL. 
- * */
-static struct fd_elements *findFdElemProcess (int fd) {
-	struct fd_elements *ret;
-	struct list_elem *l;
-	struct thread *t;
-	t = thread_current ();
-	for (l = list_begin (&t->files); l != list_end (&t->files); l = list_next (l))
-	{
-		ret = list_entry (l, struct fd_elements, thread_elem);
-		if (ret->fd == fd)
-			return ret;
-	}
-	return NULL;
-}
+
 
 /* This function has been used to check the address of the buffer
  * indices in read,write system call.It scans the address index of
@@ -634,8 +457,9 @@ static void buffer_check_terminate(void *buffer, unsigned size)
 {
 	if (get_valid_val(buffer)== -1)
 	{
-		DPRINTF_SYS("buffer_check_terminate:TERMINATE");
-		exit (-1);
+		DPRINTF_SYS("get_valid_val:TERMINATE PROCESS\n");
+		thread_current()->exit_status=-1;
+		process_terminate();
 	}
 	unsigned buffer_size = size;
 	void *buffer_tmp ;
@@ -644,10 +468,10 @@ static void buffer_check_terminate(void *buffer, unsigned size)
 	{
 		if (get_valid_val(buffer_tmp)==-1)
 		{
-			DPRINTF_SYS("buffer_check_terminate: TERMINATE");
-			exit (-1);
+			DPRINTF_SYS("get_valid_val:TERMINATE PROCESS\n");
+			thread_current()->exit_status=-1;
+			process_terminate();
 		}
-
 		if (buffer_size == 0)
 			buffer_tmp = NULL;
 		else if (buffer_size > PGSIZE)
@@ -664,26 +488,70 @@ static void buffer_check_terminate(void *buffer, unsigned size)
 	DPRINTF_SYS("buffer_check_terminate:PASSED\n");
 }
 
+void buffer_check_write(void *buffer,unsigned size)
+{
+	int get_value=get_valid_val(buffer);
+	bool value=put_valid_val(buffer,get_value);
+	if(value==false)
+	{
+		DPRINTF_SYS("get_valid_val:TERMINATE PROCESS\n");
+		thread_current()->exit_status=-1;
+		process_terminate();
+	}
+	unsigned buffer_size = size;
+	void *buffer_tmp ;
+	buffer_tmp= buffer;
+	while(buffer_tmp != NULL)
+	{
+		get_value=get_valid_val(buffer_tmp);
+		value=put_valid_val(buffer_tmp,get_value);
+		if(value==false)
+		{
+			DPRINTF_SYS("get_valid_val:TERMINATE PROCESS\n");
+			thread_current()->exit_status=-1;
+			process_terminate();
+		}
+		if (buffer_size == 0)
+			buffer_tmp = NULL;
+		else if (buffer_size > PGSIZE)
+		{
+			buffer_tmp += PGSIZE;
+			buffer_size -= PGSIZE;
+		}
+		else
+		{
+			buffer_tmp = buffer + size - 1;
+			buffer_size = 0;
+		}
+	}
+	DPRINTF_SYS("buffer_check_write:PASSED\n");
+}
+
 /* Checks the validity of the string
  * terminates the process is address is invalid
  * */
-int string_check_terminate(char* str)
+void string_check_terminate(char* str)
 {
 	char *tmp;
 	tmp=str;
-	if(get_valid_val((void*)tmp)==-1)
-		terminate_process();
+	if(get_valid_val((int *)tmp)==-1)
+	{
+		DPRINTF_SYS("get_valid_val:TERMINATE PROCESS\n");
+		thread_current()->exit_status=-1;
+		process_terminate();
+	}
 	while((tmp-str)<PGSIZE && *tmp!='\0')
 	{
 		tmp++;
-		if(get_valid_val((void*)tmp)==-1)
-			terminate_process();
-
+		if(get_valid_val((int *)tmp)==-1)
+		{
+			DPRINTF_SYS("get_valid_val:TERMINATE PROCESS\n");
+			thread_current()->exit_status=-1;
+			process_terminate();
+		}
 	}
 	DPRINTF_SYS("string_check:PASSED\n");
-	return 0;
 }
-
 
 /* Verifies the addresses passed to it by checking if they are
  * not NULL as well as not lying in the kernel space above PHYS_BASE.
@@ -693,7 +561,11 @@ static int
 get_valid_val(int *uaddr)
 {
   if(!is_user_vaddr(uaddr) || uaddr==NULL )
-      return -1;
+  {
+	  DPRINTF_SYS("get_valid_val:TERMINATE PROCESS\n");
+	  thread_current()->exit_status=-1;
+	  process_terminate();
+  }
   return get_user(uaddr);
 }
  
@@ -710,9 +582,27 @@ get_user (const int *uaddr)
   return result;
 }
 
-/* Just kill the process*/
-void terminate_process(void)
+
+static bool put_valid_val(int *uaddr,int byte)
 {
-	DPRINTF_SYS("PROCESS TERMINATED\n");
-	exit(-1);
+  if(!is_user_vaddr((void *)uaddr) || uaddr==NULL  )
+  {
+	  DPRINTF_SYS("get_valid_val:TERMINATE PROCESS\n");
+	  thread_current()->exit_status=-1;
+	  process_terminate();
+  }
+  return put_user(uaddr,byte);
+}
+
+/* Writes BYTE to user address UDST.
+   UDST must be below PHYS_BASE.
+   Returns true if successful, false if a segfault occurred. */
+
+static bool
+put_user (int *udst, int byte)
+{
+  int error_code;
+  asm ("movl $1f, %0; mov %b2, %1; 1:"
+       : "=&a" (error_code), "=m" (*udst) : "q" (byte));
+  return error_code != -1;
 }

@@ -7,6 +7,8 @@
 #include <stdint.h>
 #include "threads/synch.h"
 #include "lib/kernel/hash.h"
+#include "lib/debug.h"
+
 /* States in a thread's life cycle. */
 enum thread_status
   {
@@ -20,6 +22,7 @@ enum thread_status
    You can redefine this to whatever type you like. */
 typedef int tid_t;
 typedef int mapid_t;
+
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
 /* Thread priorities. */
@@ -27,9 +30,22 @@ typedef int mapid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
-// Non Zero and Non negative values for ret_status of a thread
-# define RET_STATUS_DEFAULT 1212121
-# define RET_STATUS_INVALID 2121212
+// structure for zombies
+struct zombie_thread
+{
+  struct list_elem all_zombie_elem;   // list helper
+  tid_t tid;                          // tid of the thread
+  tid_t parent_tid;                   // parent's tid
+  uint32_t exit_status;               // exit status
+};
+
+extern struct lock filesys_lock;
+
+#define FDTABLESIZE 128
+
+int zombie_free(tid_t tid, uint32_t* exit_status, struct thread** p_child_t);
+struct thread* get_thread_from_tid(tid_t tid);
+void print_system_state(void);
 
 /* A kernel thread or user process.
 
@@ -96,28 +112,32 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     struct list_elem allelem;           /* List element for all threads list. */
+
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 
     /* Owned by userprog/process.c. */
     uint32_t *pagedir;                  /* Page directory. */
-    struct list files;
-    struct semaphore wait;
-    int ret_status;
-    struct thread *parent;
-    bool exited;                        /* Checks if the thread has exited or not*/
-    struct file *self;
+    struct file* fd_table[FDTABLESIZE]; //  fixed size file descriptor table
+    struct file* fi;                    //  executables file pointer
+
+    struct hash suppl_page_table;
+    uint32_t exit_status;               // exit status of the process
+    tid_t parent_tid;                   // tid of its parent 
+    struct thread* parent_waiting;      // parent has called wait() and is blocked 
+    int32_t exec_status;                // exec() function status
+    struct thread* parent_waiting_exec; // parent has called exec() and is blocked 
+                                        // waiting for load to complete and get the 
+                                        // correct tid after load.
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
 
-    /* Supplementary Table (Per Process)*/
-    struct hash suppl_page_table;
-    
-    /*memory mapping*/
+    /*For Memory Mapped Files*/
     struct hash mmfiles;
     mapid_t mapid_allocator;
-};
+
+  };
 
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
@@ -154,6 +174,7 @@ int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+void zombie_with_dead_parent_cleanup(void);
+void zombie_cleanup_on_parent_termination(tid_t parent_tid);
 
 #endif /* threads/thread.h */
-struct thread *get_thread_by_tid (tid_t tid);

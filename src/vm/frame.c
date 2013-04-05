@@ -15,6 +15,7 @@ void frameInit(void);
 void *allocateFrame(enum palloc_flags FLAG, void *page);
 void freeFrame(void *frame);
 void *evictFrameFor(void *page);
+void setFrameAttributes(uint32_t *pte, void *kpage);
 
 static bool addFrameToTable(void *frame, void *page);
 static void removeFrameFromTable(void *frame);
@@ -34,7 +35,7 @@ void frameInit(void)
 
 void *allocateFrame(enum palloc_flags FLAG, void *page)
 {
-	void *new_frame = NULL;
+	void * new_frame = NULL;
 	// allocate a new page from user pool
 	if((FLAG & PAL_USER))
 	{
@@ -50,9 +51,6 @@ void *allocateFrame(enum palloc_flags FLAG, void *page)
 	if(new_frame == NULL)
 	{
 		DPRINTF_FRAME("allocateFrame:EVICTING\n");
-		// depending upon the implementation of evictFrame() we will
-		// need to update the frameStruct->page of the Frame Table Entry
-		// corresponding to the new_frame
 		new_frame = evictFrameFor(page);
 		// if evicting fails, PANIC the kernel
 		if(new_frame == NULL)
@@ -70,7 +68,6 @@ void *allocateFrame(enum palloc_flags FLAG, void *page)
 	}
 	
 	// return the frame;
-
 	return new_frame;
 }
 
@@ -79,7 +76,8 @@ void freeFrame(void *frame){
 	palloc_free_page(frame);
 }
 
-void *evictFrameFor(void *page){
+void *evictFrameFor(void *page)
+{
 	struct frameStruct *evictedFrame;
 
 	lock_acquire(&lockForEviction);
@@ -88,15 +86,15 @@ void *evictFrameFor(void *page){
 
 	if(evictedFrame == NULL)
 		PANIC("Can't find any Frame to evict");
-	//printf(">>>>>>>>>>>>>>>>>frame addr:%x\n",evictedFrame->frame);
-	//printf(">>>>>>>>>>>>>>>>>page addr:%x\n",evictedFrame->page);
+
 	if(!saveEvictedFrame(evictedFrame))
 		PANIC("Can't save Evicted Frame");
-	
+
 	evictedFrame->tid = thread_current()->tid;
 	evictedFrame->page = page;
 
 	lock_release(&lockForEviction);
+
 	return evictedFrame->frame;
 }
 
@@ -105,23 +103,20 @@ static struct frameStruct *findFrameForEviction(void){
 	struct frameStruct *temp;
 	struct list_elem *e;
 	struct thread *t;
-	//printf("Evicted frame:ENTER\n");
 	
 	int i = 0;
 	
 	for(i = 0; i < 2; i++){
 	
 		e = list_head(&frameTable);
-		e = list_next(e);
 		
-		for(; e != list_tail(&frameTable); e = list_next(e))
+		while( (e = list_next(e)) != list_tail(&frameTable))
 		{
 			temp = list_entry (e, struct frameStruct, listElement);
-			t=get_thread_by_tid(temp->tid);
+			t = get_thread_from_tid(temp->tid);
 			//printf("page in temp:%x frame in temp:%x\n",temp->page,temp->frame);
 			if(!pagedir_is_accessed(t->pagedir, temp->page))
 			{
-				//printf("loop 1\n");
 				frame = temp;
 				list_remove(e);
 				list_push_back(&frameTable, e);
@@ -129,10 +124,9 @@ static struct frameStruct *findFrameForEviction(void){
 			}
 			else
 			{
-				//printf("loop 2\n");
 				pagedir_set_accessed(t->pagedir, temp->page, false);
 			}
-			//printf("loop 3\n");
+
 		}
 		
 		if(frame != NULL)
@@ -144,17 +138,16 @@ static struct frameStruct *findFrameForEviction(void){
 
 static bool saveEvictedFrame(struct frameStruct *frame)
 {
-	struct thread *t = get_thread_by_tid(frame->tid);
+	struct thread *t = get_thread_from_tid(frame->tid);
 	struct supptable_page *spte = get_supptable_page(&t->suppl_page_table, frame->page);
 	size_t swapSlotID = 0;
 
 	if(spte == NULL)
 	{
 		spte = calloc(1, sizeof(spte));
-		//printf("frame->page:%x\n",frame->page);
 		spte->uvaddr = frame->page;
 		spte->page_type = SWAP;
-		//printf("NULL return in loop1\n");
+//		printf("NULL return in loop1\n");
 		if(!supptable_add_page(&t->suppl_page_table, spte))
 			return false;
 	}
@@ -166,16 +159,13 @@ static bool saveEvictedFrame(struct frameStruct *frame)
 		swapSlotID = swap_out_page(spte->uvaddr);
 
 		if(swapSlotID == SWAP_ERROR)
-		{
-			printf("SWAP_ERROR\n");
 			return false;
-		}
 		spte->page_type = spte->page_type | SWAP;
 	}
 
 	memset(frame->frame, 0, PGSIZE);
 	spte->swap_slot_index = swapSlotID;
-	spte->writable = PTE_W;
+	spte->swap_writable =*frame->pageTableEntry & PTE_W;
 	spte->is_page_loaded = false;
 	pagedir_clear_page(t->pagedir, spte->uvaddr);
 
@@ -252,4 +242,14 @@ static struct frameStruct *getFrameFromTable(void *frame)
 	}
 	lock_release(&frameTableLock);
 	return frameTableEntry;
+}
+
+void setFrameAttributes(uint32_t *pte, void *kpage)
+{
+	struct frameStruct *temp;
+	temp=getFrameFromTable(kpage);
+	if(temp!=NULL)
+	{
+		temp->pageTableEntry=pte;
+	}
 }

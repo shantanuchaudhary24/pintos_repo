@@ -1,7 +1,4 @@
-#include <stdio.h>
-#include "lib/kernel/hash.h"
-#include "filesys/file.h"
-#include "threads/thread.h"
+#include "filesys/off_t.h"
 
 /* Determining the type of page of supplementary page */
 #define SWAP 001
@@ -39,4 +36,3 @@ void free_supptable(struct hash *table);
 void write_page_to_file(struct supptable_page *page_entry);
 void grow_stack(void *vaddr);
 bool load_supptable_page(struct supptable_page *page_entry);
-

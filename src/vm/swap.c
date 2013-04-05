@@ -1,9 +1,9 @@
+#include "vm/swap.h"
 #include <bitmap.h>
 #include "devices/block.h"
 #include "threads/vaddr.h"
 #include "threads/synch.h"
 #include "threads/malloc.h"
-#include "vm/swap.h"
 #include "vm/debug.h"
 
 static struct swap_struct *swap_space;
@@ -59,12 +59,13 @@ size_t swap_out_page(void *vaddr)
 {
     void* buffer;
     block_sector_t sector;
-    lock_acquire(&swap_lock);
+    DPRINTF_SWAP("swap_out_page:BEGIN\n");
+//    lock_acquire(&swap_lock);
     size_t swap_slot=bitmap_scan(swap_space->swap_table,SWAP_TABLE_START,SWAP_TABLE_CNT,false);
     
     if (swap_slot==BITMAP_ERROR)
     {
-    	lock_release(&swap_lock);
+//    	lock_release(&swap_lock);
     	PANIC("swap_out_page:SWAP SLOT ERROR\n");
     	return SWAP_ERROR;
     }
@@ -77,7 +78,7 @@ size_t swap_out_page(void *vaddr)
         block_write(swap_space->swap_disk,sector,buffer);
     }
     bitmap_mark(swap_space->swap_table,swap_slot);
-    lock_release(&swap_lock);
+//    lock_release(&swap_lock);
     return swap_slot;
 }
 
@@ -90,7 +91,8 @@ void swap_in_page(size_t swap_slot,void *vaddr)
 	void* buffer;
 	block_sector_t sector;
 	size_t counter=0;
-	lock_acquire(&swap_lock);
+	DPRINTF_SWAP("swap_in_page:BEGIN\n");
+//	lock_acquire(&swap_lock);
 	for(counter=0;counter<NUM_SECTORS_PER_PAGE;counter++)
 	{
 		sector=swap_slot*NUM_SECTORS_PER_PAGE+counter;
@@ -98,7 +100,7 @@ void swap_in_page(size_t swap_slot,void *vaddr)
 		block_read(swap_space->swap_disk,sector,buffer);
 	}
 	bitmap_reset(swap_space->swap_table,swap_slot);
-	lock_release(&swap_lock);
+//	lock_release(&swap_lock);
 }
 
 /* Just flips the bit pointed by swap_slot.This is needed
@@ -106,7 +108,8 @@ void swap_in_page(size_t swap_slot,void *vaddr)
  * */
 void swap_clear_slot(size_t swap_slot)
 {
-	lock_acquire(&swap_lock);
+	DPRINTF_SWAP("swap_clear_slot:BEGIN\n");
+//	lock_acquire(&swap_lock);
 	if(bitmap_test(swap_space->swap_table,swap_slot)==true)
 	{
 		DPRINTF_SWAP("swap_clear_slot:SWAP SLOT CLEARED\n");
@@ -115,7 +118,7 @@ void swap_clear_slot(size_t swap_slot)
 	else {
 		DPRINTF_SWAP("swap_clear_slot:SWAP SLOT ALREADY CLEAR\n");
 	}
-	lock_release(&swap_lock);
+//	lock_release(&swap_lock);
 }
 
 size_t bitmap_table_size(void)

@@ -1,5 +1,4 @@
-#include <bitmap.h>
-
+#include "lib/stddef.h"
 /* Defines the number of sectors needed for storing a page */
 #define NUM_SECTORS_PER_PAGE PGSIZE/BLOCK_SECTOR_SIZE
 

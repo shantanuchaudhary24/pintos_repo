@@ -5,6 +5,7 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+#include "lib/debug.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -12,7 +13,6 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
-#include "vm/page.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -30,6 +30,8 @@ static struct list ready_list;
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+static struct list all_zombie;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -38,6 +40,7 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
+struct lock filesys_lock;
 
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
@@ -72,6 +75,7 @@ static void *alloc_frame (struct thread *, size_t size);
 static void schedule (void);
 void schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
+void zombie_add(tid_t tid, uint32_t exit_status, tid_t parent_tid);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -94,6 +98,8 @@ thread_init (void)
   lock_init (&tid_lock);
   list_init (&ready_list);
   list_init (&all_list);
+  list_init (&all_zombie);
+  lock_init (&filesys_lock);
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -191,6 +197,10 @@ thread_create (const char *name, int priority,
      member cannot be observed. */
   old_level = intr_disable ();
 
+  t->parent_tid = thread_current()->tid;
+  if(thread_current()->tid != 1)
+    t->parent_waiting_exec = thread_current();
+
   /* Stack frame for kernel_thread(). */
   kf = alloc_frame (t, sizeof *kf);
   kf->eip = NULL;
@@ -206,19 +216,13 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+//  printf("create thread: %s----%d\n", name, t->tid);
+
   intr_set_level (old_level);
 
   /* Add to run queue. */
   thread_unblock (t);
 
-//LAB2 IMPLEMEMTATION
-  sema_init(&t->wait, 0);
-  t->ret_status = RET_STATUS_DEFAULT;
-  list_init (&t->files);
-  t->parent = thread_current ();
-//==LAB2 IMPLEMEMTATION  
-  t->exited = false;
-//===
   return tid;
 }
 
@@ -274,6 +278,7 @@ struct thread *
 thread_current (void) 
 {
   struct thread *t = running_thread ();
+  
   /* Make sure T is really a thread.
      If either of these assertions fire, then your thread may
      have overflowed its stack.  Each thread has less than 4 kB
@@ -298,6 +303,7 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
+
 #ifdef USERPROG
   process_exit ();
 #endif
@@ -306,10 +312,18 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it call schedule_tail(). */
   intr_disable ();
-  struct thread *t=thread_current();
-  list_remove (&t->allelem);
-  t->status = THREAD_DYING;
-//  free_supptable(&t->suppl_page_table); 			// freeing the supplementary table
+  struct thread* t_cur = thread_current();
+  
+  // add to zombie list
+  zombie_add(t_cur->tid, t_cur->exit_status, t_cur->parent_tid);
+  
+  // check if parent is waiting for exit_status
+  // if yes then unblock it
+  if(t_cur->parent_waiting)
+    thread_unblock(t_cur->parent_waiting);
+  
+  list_remove (&t_cur->allelem);
+  t_cur->status = THREAD_DYING;
   schedule ();
   NOT_REACHED ();
 }
@@ -479,6 +493,8 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->parent_waiting = 0;
+  t->exec_status = -1;
   list_push_back (&all_list, &t->allelem);
 }
 
@@ -578,25 +594,6 @@ schedule (void)
   schedule_tail (prev); 
 }
 
-struct thread *
-get_thread_by_tid (tid_t tid)
-{
-  struct list_elem *f;
-  struct thread *ret;
-  
-  ret = NULL;
-  for (f = list_begin (&all_list); f != list_end (&all_list); f = list_next (f))
-    {
-      ret = list_entry (f, struct thread, allelem);
-      ASSERT (is_thread (ret));
-      if (ret->tid == tid)
-        return ret;
-    }
-    
-  return NULL;
-}
-
-
 /* Returns a tid to use for a new thread. */
 static tid_t
 allocate_tid (void) 
@@ -614,3 +611,176 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+// adds a zombie to the zombie list
+void zombie_add(tid_t tid, uint32_t exit_status, tid_t parent_tid)
+{
+  struct zombie_thread* t = palloc_get_page (PAL_ZERO);
+  if (t == NULL)
+    PANIC("zombie_add: unable to allocate space for zombie");
+
+  memset(t, 0, sizeof *t);
+  t->tid = tid;
+  t->exit_status = exit_status;
+  t->parent_tid = parent_tid;
+  list_push_front(&all_zombie, &t->all_zombie_elem);
+}
+
+// try to free up a given zombie
+// 
+//  returns following error codes
+//  0 success [in this case it copies the exit_status and 
+//              child's thread* to the addresses passed by caller ]
+//  1 invalid child
+//  2 child running 
+int zombie_free(tid_t tid, uint32_t* exit_status, struct thread** p_child_t)
+{
+  enum intr_level intr = intr_disable();
+  struct list_elem *e;
+  for(e = list_begin(&all_zombie); e != list_end(&all_zombie); e = list_next(e))
+  {
+    struct zombie_thread *f = list_entry(e, struct zombie_thread, all_zombie_elem);
+    if(f->tid == tid)
+    {
+      if(f->parent_tid != thread_current()->tid)
+      {
+        intr_set_level(intr);
+        return 1;
+      }
+      list_remove(&(f->all_zombie_elem));
+      *exit_status = f->exit_status;
+      palloc_free_page(f);
+      
+      intr_set_level(intr);
+      return 0;
+    }
+  }
+  for(e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
+  {
+    struct thread *f = list_entry(e, struct thread, allelem);
+    if(f->tid == tid)
+    {
+      if(f->parent_tid != thread_current()->tid)
+      {
+        intr_set_level(intr);
+        return 1;
+      }
+      else
+      {
+        *p_child_t = f;
+        
+        intr_set_level(intr);
+        return 2;
+      }
+    }
+  }
+
+  intr_set_level(intr);
+  return 1;
+}
+
+// function to remove zombie children of the given parent
+void zombie_cleanup_on_parent_termination(tid_t parent_tid)
+{
+  enum intr_level intr = intr_disable();
+  struct list_elem *e;
+  for(e = list_begin(&all_zombie); e != list_end(&all_zombie);)
+  {
+    struct zombie_thread *f = list_entry(e, struct zombie_thread, all_zombie_elem);
+    if(f->tid == parent_tid)
+    {
+    	e = list_remove(&(f->all_zombie_elem));
+    	palloc_free_page(f);
+    }
+    else
+      e = list_next(e);
+  }
+  intr_set_level(intr);
+}
+
+// function to remove zombie children of parents that are dead
+void zombie_with_dead_parent_cleanup(void)
+{
+  enum intr_level intr = intr_disable();
+  struct list_elem *e;
+  for(e = list_begin(&all_zombie); e != list_end(&all_zombie);)
+  {
+    struct zombie_thread *f = list_entry(e, struct zombie_thread, all_zombie_elem);
+    tid_t parent = f->parent_tid;
+
+    if(!get_thread_from_tid(parent))
+    {
+      e = list_remove(&(f->all_zombie_elem));
+      palloc_free_page(f);
+    }
+    else
+      e = list_next(e);
+  }
+  intr_set_level(intr);
+}
+
+// returns thread* for a given tid
+struct thread* get_thread_from_tid(tid_t tid)
+{
+  enum intr_level intr = intr_disable();
+  struct list_elem *e;
+  for(e = list_begin(&all_list); e != list_end(&all_list); e = list_next(e))
+  {
+    struct thread *f = list_entry(e, struct thread, allelem);
+    if(f->tid == tid)
+    {
+      intr_set_level(intr);
+      return f;
+    }
+  }
+  intr_set_level(intr);
+  return 0;
+}
+
+// Everything below this are debug helpers
+
+#include <bitmap.h>
+struct pool
+{
+  struct lock lock;                   /* Mutual exclusion. */
+  struct bitmap *used_map;            /* Bitmap of free pages. */
+  uint8_t *base;                      /* Base of pool. */
+};
+extern struct pool kernel_pool, user_pool;
+
+// a function to print system state
+void print_system_state(void)
+{
+  // zombie
+  int zombie = 0;
+  int process = 0;
+  struct list_elem *e;
+  for(e = list_begin(&all_zombie); e != list_end(&all_zombie);
+       e = list_next(e))
+    {
+      //struct zombie_thread *f = list_entry(e, struct zombie_thread, all_zombie_elem);
+      //printf("zombie %d\n",f->tid);
+      zombie++;
+    }
+  for(e = list_begin(&all_list); e != list_end(&all_list);
+       e = list_next(e))
+    {
+      //struct thread *f = list_entry(e, struct thread, allelem);
+      //printf("process %s\n",f->name);
+      process++;
+    }
+ 
+  struct pool *kpool;
+  kpool = &kernel_pool;
+  struct pool *upool;
+  upool = &user_pool;
+
+  int user = 0;
+  int kernel = 0;
+  kernel = bitmap_count(kpool->used_map, 0, bitmap_size(kpool->used_map), 1);
+  user = bitmap_count(upool->used_map, 0, bitmap_size(upool->used_map), 1);
+
+  printf("system state: zombies = %d, processes = %d, \
+      free kernel mem = %d, free user mem = %d\n", 
+      zombie, process, kernel, user);
+}

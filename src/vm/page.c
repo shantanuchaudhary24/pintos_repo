@@ -1,27 +1,23 @@
 #include <stdio.h>
 #include <stddef.h>
 #include <string.h>
+#include "lib/kernel/hash.h"
 #include "lib/debug.h"
+#include "lib/stdbool.h"
 #include "lib/kernel/hash.h"
 #include "threads/thread.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
 #include "threads/vaddr.h"
+#include "threads/thread.h"
+#include "filesys/file.h"
 #include "userprog/pagedir.h"
-#include "vm/page.h"
-#include "lib/stdbool.h"
 #include "vm/swap.h"
 #include "vm/frame.h"
 #include "vm/debug.h"
+#include "vm/page.h"
 
-bool init_supptable(struct hash *table);
-bool supptable_add_page(struct hash *table,struct supptable_page *page_entry);
-bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable);
-struct supptable_page *get_supptable_page(struct hash *table, void *vaddr);
-void free_supptable(struct hash *table);
-void write_page_to_file(struct supptable_page *page_entry);
-void grow_stack(void *vaddr);
-bool load_supptable_page(struct supptable_page *page_entry);
+extern struct lock filesys_lock;
 
 static bool load_page_swap(struct supptable_page *page_entry);
 static bool load_page_file(struct supptable_page *page_entry);
@@ -98,8 +94,10 @@ void write_page_to_file(struct supptable_page *page_entry)
 {
 	if(page_entry->page_type & MMF)
 	{
+		lock_acquire(&filesys_lock);
 		file_seek(page_entry->file,page_entry->offset);
 		file_write(page_entry->file,page_entry->uvaddr,page_entry->read_bytes);
+		lock_release(&filesys_lock);
 	}
 }
 
@@ -216,8 +214,9 @@ static bool load_page_swap(struct supptable_page *page_entry)
 	void *kpage;
 	kpage = allocateFrame(PAL_USER,page_entry->uvaddr);
 	if (kpage == NULL)
+	{
 		return false;
-
+	}
 	if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->swap_writable))
 	{
 		freeFrame (kpage);
@@ -247,28 +246,33 @@ static bool load_page_swap(struct supptable_page *page_entry)
  * */
 static bool load_page_file(struct supptable_page *page_entry)
 {
-	struct thread *t=thread_current();
-	file_seek (page_entry->file, page_entry->offset);
-
 	DPRINT_PAGE("load_page_file:PAGE UVADDR:%x\n",(uint32_t)page_entry->uvaddr);
 	void *kpage;
-	kpage= allocateFrame(PAL_USER,page_entry->uvaddr);
-	DPRINT_PAGE("load_page_file:PAGE kpage:%x\n",(uint32_t)kpage);
+	int ret=0;
+	struct thread *t=thread_current();
 
+	lock_acquire(&filesys_lock);
+	file_seek (page_entry->file, page_entry->offset);
+	kpage= allocateFrame(PAL_USER,page_entry->uvaddr);
 	if (kpage == NULL)
 	{
 		DPRINTF_PAGE("load_page_file:FRAME ALLOC. FAILED\n");
+		lock_release(&filesys_lock);
 		return false;
 	}
 
-	if (file_read(page_entry->file,kpage,page_entry->read_bytes)!= (int)page_entry->read_bytes)
+	ret=file_read(page_entry->file,kpage,page_entry->read_bytes);
+	lock_release(&filesys_lock);
+
+	if (ret!= (int)page_entry->read_bytes)
 	{
-		DPRINTF_PAGE("load_page_file:FREE FRAME");
+		DPRINTF_PAGE("load_page_file:FILE_READ FAIL:");
 		freeFrame(kpage);
 	    return false;
 	}
+
 	memset(kpage + page_entry->read_bytes, 0,page_entry->zero_bytes);
-	//printf("fault point:\n");
+
 	if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->writable))
 	{
 		DPRINTF_PAGE("load_page_file:FREE FRAME");
@@ -291,18 +295,24 @@ static bool load_page_file(struct supptable_page *page_entry)
  * */
 static bool load_page_mmf (struct supptable_page *page_entry)
 {
+	void *kpage ;
+	int ret=0 ;
 	struct thread *cur = thread_current ();
 
+	lock_acquire(&filesys_lock);
 	file_seek (page_entry->file, page_entry->offset);
-
-	void *kpage = allocateFrame (PAL_USER, page_entry->uvaddr);
+	kpage = allocateFrame (PAL_USER, page_entry->uvaddr);
 	if (kpage == NULL)
 	{
 		DPRINTF_PAGE("Load Page MMF: false : couldn't allocate Frame\n");
+		lock_release(&filesys_lock);
 		return false;
 	}
 
-	if (file_read (page_entry->file, kpage, page_entry->read_bytes) != (int) page_entry->read_bytes) {
+	ret=file_read (page_entry->file, kpage, page_entry->read_bytes);
+	lock_release(&filesys_lock);
+	if ( ret!= (int) page_entry->read_bytes)
+	{
 		freeFrame (kpage);
 		DPRINTF_PAGE("Load Page MMF: false : couldn't read file\n");
 		return false; 
