@@ -21,7 +21,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/input.h"
-#include "debug_helper.h"
 #include "vm/page.h"
 #include "vm/debug.h"
 #include "userprog/mmf.h"
