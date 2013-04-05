@@ -303,7 +303,7 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
-  intr_disable ();
+  
 #ifdef USERPROG
   process_exit ();
 #endif
@@ -311,7 +311,7 @@ thread_exit (void)
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it call schedule_tail(). */
-
+  intr_disable ();
   struct thread* t_cur = thread_current();
   
   // add to zombie list

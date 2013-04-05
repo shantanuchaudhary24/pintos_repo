@@ -21,8 +21,8 @@ static bool addFrameToTable(void *frame, void *page);
 static void removeFrameFromTable(void *frame);
 static struct frameStruct *getFrameFromTable(void *frame);
 static struct frameStruct *findFrameForEviction(void);
-static bool saveEvictedFrame(struct frameStruct *frame);
 static struct frameStruct *findFrameForEviction1(void);
+static bool saveEvictedFrame(struct frameStruct *frame);
 
 static struct lock frameTableLock;
 static struct lock lockForEviction;
@@ -42,7 +42,7 @@ void *allocateFrame(enum palloc_flags FLAG, void *page)
 	// allocate a new page from user pool
 	if((FLAG & PAL_USER))
 	{
-		DPRINTF_FRAME("allocateFrame:ALLOC NEW FRAME\n");
+		DPRINTF_FRAME("allocateFrame: ALLOC NEW FRAME\n");
 
 		if((FLAG & PAL_ZERO))
 			new_frame = palloc_get_page(PAL_USER|PAL_ZERO);
@@ -53,7 +53,7 @@ void *allocateFrame(enum palloc_flags FLAG, void *page)
 	// if can't allocate a new page from user pool, try evicting one from the frameTable
 	if((FLAG & PAL_USER) && new_frame == NULL)
 	{
-		DPRINTF_FRAME("allocateFrame:EVICTING\n");
+		DPRINTF_FRAME("allocateFrame: EVICTING\n");
 		new_frame = evictFrameFor(page);
 		// if evicting fails, PANIC the kernel
 		if(new_frame == NULL)
@@ -86,15 +86,15 @@ void *evictFrameFor(void *page)
 //	printf("about to acquire lockForEviction\n");
 	lock_acquire(&frameTableLock);
 	DPRINTF_FRAME("evictFrameFor: successfuly acquired lockForEviction\n");
-//	printf("evicted frame return:enter\n");
+
 	evictedFrame = findFrameForEviction1();
-//	printf("evicted frame return\n");
+
 	if(evictedFrame == NULL)
 		PANIC("Can't find any Frame to evict");
 
 	if(!saveEvictedFrame(evictedFrame))
 		PANIC("Can't save Evicted Frame");
-//	printf("saved evicted frame\n");
+
 	evictedFrame->tid = thread_current()->tid;
 	evictedFrame->page = page;
 
@@ -103,6 +103,7 @@ void *evictFrameFor(void *page)
 	
 	return evictedFrame->frame;
 }
+
 
 static struct frameStruct *findFrameForEviction1(void){
 	struct frameStruct *frame = NULL;
@@ -135,22 +136,17 @@ static struct frameStruct *findFrameForEviction1(void){
 }
 
 
-
-
 static struct frameStruct *findFrameForEviction(void){
 	struct frameStruct *frame = NULL;
 	struct frameStruct *temp;
 	struct list_elem *e;
 	struct thread *t;
 	
-	int i = 0;
+	int i;
 	
 	for(i = 0; i < 2; i++){
 	
-		e = list_head(&frameTable);
-		
-		while( (e = list_next(e)) != list_tail(&frameTable))
-		{
+		for (e = list_begin (&frameTable); e != NULL && e != list_end (&frameTable); e = list_next (e)){
 			temp = list_entry (e, struct frameStruct, listElement);
 			t = get_thread_from_tid(temp->tid);
 			//printf("page in temp:%x frame in temp:%x\n",temp->page,temp->frame);
@@ -165,9 +161,8 @@ static struct frameStruct *findFrameForEviction(void){
 			{
 				pagedir_set_accessed(t->pagedir, temp->page, false);
 			}
-
 		}
-		
+
 		if(frame != NULL)
 			break;
 	}
@@ -177,18 +172,24 @@ static struct frameStruct *findFrameForEviction(void){
 
 static bool saveEvictedFrame(struct frameStruct *frame)
 {
+	DPRINTF_FRAME("saveEvictedFrame: in\n");
 	struct thread *t = get_thread_from_tid(frame->tid);
+	DPRINTF_FRAME("saveEvictedFrame: success in getting thread\n");
 	struct supptable_page *spte = get_supptable_page(&t->suppl_page_table, frame->page);
+	DPRINTF_FRAME("saveEvictedFrame: success in getting supptable_pte\n");
 	size_t swapSlotID = 0;
 
 	if(spte == NULL)
 	{
 		DPRINTF_FRAME("saveEvictedFrame: spte is null\n");
 		spte = calloc(1, sizeof(*spte));
+		DPRINTF_FRAME("saveEvictedFrame: allocated memory to supptable\n");
+		
 		spte->uvaddr = frame->page;
 		spte->page_type = SWAP;
 		if(!supptable_add_page(&t->suppl_page_table, spte))
 			return false;
+		DPRINTF_FRAME("saveEvictedFrame: spte added to supp_table\n");
 	}
 
 	if(pagedir_is_dirty(t->pagedir, spte->uvaddr) && (spte->page_type & MMF))
@@ -201,13 +202,14 @@ static bool saveEvictedFrame(struct frameStruct *frame)
 			return false;
 		spte->page_type = spte->page_type | SWAP;
 	}
-
+	DPRINTF_FRAME("saveEvictedFrame: frame saved\n");
 	memset(frame->frame, 0, PGSIZE);
 	spte->swap_slot_index = swapSlotID;
 	spte->swap_writable =*frame->pageTableEntry & PTE_W;
 	spte->is_page_loaded = false;
 	pagedir_clear_page(t->pagedir, spte->uvaddr);
 
+	DPRINTF_FRAME("saveEvictedFrame: out\n");
 	return true;
 }
 
@@ -219,13 +221,14 @@ static bool addFrameToTable(void *frame, void *page)
 	//printf("search page addr:%x\n",page);
 	if(newFrameEntry!=NULL)
 	{
-		DPRINTF_FRAME("addFrameToTable:REMOVE PREV FRAME");
-		removeFrameFromTable(newFrameEntry);
+		DPRINTF_FRAME("addFrameToTable: REMOVE PREV FRAME");
+//		PANIC("Can't Add Frame. Frame already exists.");
+		removeFrameFromTable(frame);
 	}
 	newFrameEntry = calloc (1, sizeof(*newFrameEntry));
 	if(newFrameEntry == NULL)
 	{
-		DPRINTF_FRAME("addFrameToTable:FAIL");
+		DPRINTF_FRAME("addFrameToTable: FAIL");
 		return false;
 	}
 	newFrameEntry->frame = frame;
@@ -233,7 +236,7 @@ static bool addFrameToTable(void *frame, void *page)
 	newFrameEntry->page = page;
 	
 	lock_acquire(&frameTableLock);
-	//list_push_back(&frameTable, &newFrameEntry->listElement);
+//	list_push_back(&frameTable, &newFrameEntry->listElement);
 	list_insert(eclock,&newFrameEntry->listElement);
 	lock_release(&frameTableLock);
 
@@ -250,16 +253,19 @@ static void removeFrameFromTable(void *frame)
 
 	lock_acquire(&frameTableLock);
 	
-	temp = list_head(&frameTable);
 	
-	while((temp = list_next(temp)) != list_tail(&frameTable)){
+	for (temp = list_begin (&frameTable); temp != list_end (&frameTable); temp = list_next (temp)){
 		frameTableEntry = list_entry(temp, struct frameStruct, listElement);
 		if(frameTableEntry->frame == frame){
+			DPRINTF_FRAME("removeFromTable: about to remove\n");
 			list_remove(temp);
 			free(frameTableEntry);
 			break;
 		}
 	}
+	
+//	while((temp = list_next(temp)) != list_tail(&frameTable)){
+//	}
 
 	lock_release(&frameTableLock);
 }
@@ -273,6 +279,7 @@ void removeEntriesFor(tid_t t){
 			removeFrameFromTable(fte->frame);
 	}
 }
+
 
 static struct frameStruct *getFrameFromTable(void *frame)
 {
