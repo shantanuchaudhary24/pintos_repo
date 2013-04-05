@@ -1,5 +1,4 @@
 #include "userprog/mmf.h"
-#include "userprog/syscall.h"
 #include "threads/thread.h"
 #include "lib/user/syscall.h"
 #include "vm/page.h"

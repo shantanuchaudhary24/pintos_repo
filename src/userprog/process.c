@@ -493,7 +493,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* We arrive here whether the load is successful or not. */
   if(!success)
   {
-    DPRINTF("load function failed\n");
+    DPRINTF_PROC("load function failed\n");
   }
   file_close (file);
   return success;
