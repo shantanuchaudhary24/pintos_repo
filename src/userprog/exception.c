@@ -183,8 +183,10 @@ page_fault (struct intr_frame *f)
   			  DPRINT_EXCEP("page_fault:UCSEG:Getting correct Entry Addr:%x\n",(uint32_t)page_entry->uvaddr);
   			  if(page_entry!=NULL && !page_entry->is_page_loaded)
   			  {
-  				  DPRINTF_EXCEP("page_fault:UCSEG:LOAD PAGE\n");
-  				  load_supptable_page(page_entry);
+  				  if(load_supptable_page(page_entry)==false)
+  				  {
+  					  DPRINTF_EXCEP("page_fault:UCSEG:LOAD PAGE FAILED\n");
+  				  }
   			  }
   			  else if(page_entry==NULL && ((int *)fault_addr>=(int *)(f->esp)-8) && (pg_round_down(f->esp)>=(PHYS_BASE-STACK_SIZE)))
   			  {
@@ -208,7 +210,7 @@ page_fault (struct intr_frame *f)
   		  DPRINT_EXCEP("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
   		  DPRINT_EXCEP("page_fault:KERNEL t->stack addr:%x\n",(uint32_t)t->stack);
   		  DPRINT_EXCEP("is_user_vaddr(fault_addr):%d\n",is_user_vaddr(fault_addr));
-  		  DPRINT_EXCEP("EIP is:%x\n",(void *)f->eip);
+  		  DPRINT_EXCEP("EIP is:%x\n",(uint32_t)f->eip);
   		  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
   		  {
   			  t->exit_status=-1;
@@ -230,5 +232,4 @@ page_fault (struct intr_frame *f)
   			  else kill(f);
   		  }break;
   	}
-  //kill(f);
 }

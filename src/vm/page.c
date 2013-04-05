@@ -75,11 +75,11 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 	page_entry->writable=writable;
 	page_entry->is_page_loaded=false;
 
-	//DPRINT_PAGE("supptable_add_file: ENTRY ADDR:%x\n",(uint32_t)(page_entry->uvaddr));
+	DPRINT_PAGE("supptable_add_file: ENTRY ADDR:%x\n",(uint32_t)(page_entry->uvaddr));
 
 	if(hash_insert(&t->suppl_page_table,&page_entry->hash_index)==NULL)
 	{
-		//DPRINTF_PAGE("supptable_add_file:PAGE ADDED.\n");
+		DPRINTF_PAGE("supptable_add_file:PAGE ADDED.\n");
 		return true;
 	}
 	else
@@ -162,11 +162,14 @@ void grow_stack(void *vaddr)
 	void *temp_frame;
 	temp_frame= allocateFrame(PAL_USER|PAL_ZERO,vaddr);
 	if(temp_frame==NULL)
-		PANIC("Frame allocation failed");
+		PANIC("grow_stack:FRAME ALLOCATION FAILED");
 	else
 	{
 		if(!pagedir_set_page(t->pagedir, pg_round_down(vaddr), temp_frame, true))
-			freeFrame(vaddr);
+			{
+				DPRINTF_PAGE("grow_stack:PAGE NOT SET IN PAGEDIR\n");
+				freeFrame(vaddr);
+			}
 	}
 }
 
@@ -256,7 +259,7 @@ static bool load_page_file(struct supptable_page *page_entry)
 	kpage= allocateFrame(PAL_USER,page_entry->uvaddr);
 	if (kpage == NULL)
 	{
-		DPRINTF_PAGE("load_page_file:FRAME ALLOC. FAILED\n");
+		DPRINTF_PAGE("load_page_file:FRAME ALLOC FAILED\n");
 		lock_release(&filesys_lock);
 		return false;
 	}
@@ -266,7 +269,7 @@ static bool load_page_file(struct supptable_page *page_entry)
 
 	if (ret!= (int)page_entry->read_bytes)
 	{
-		DPRINTF_PAGE("load_page_file:FILE_READ FAIL:");
+		DPRINTF_PAGE("load_page_file:FILE_READ FAIL\n");
 		freeFrame(kpage);
 	    return false;
 	}
@@ -275,7 +278,7 @@ static bool load_page_file(struct supptable_page *page_entry)
 
 	if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->writable))
 	{
-		DPRINTF_PAGE("load_page_file:FREE FRAME");
+		DPRINTF_PAGE("load_page_file:PAGE NOT SET IN PAGEDIR\n");
 		freeFrame (kpage);
 		return false;
 	}

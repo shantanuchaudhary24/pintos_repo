@@ -22,15 +22,18 @@ static void removeFrameFromTable(void *frame);
 static struct frameStruct *getFrameFromTable(void *frame);
 static struct frameStruct *findFrameForEviction(void);
 static bool saveEvictedFrame(struct frameStruct *frame);
+static struct frameStruct *findFrameForEviction1(void);
 
 static struct lock frameTableLock;
 static struct lock lockForEviction;
+static struct list_elem *eclock;
 
 void frameInit(void)
 {
 	list_init(&frameTable);
 	lock_init(&frameTableLock);
 	lock_init(&lockForEviction);
+	eclock=list_begin(&frameTable);
 }
 
 void *allocateFrame(enum palloc_flags FLAG, void *page)
@@ -82,7 +85,7 @@ void *evictFrameFor(void *page)
 
 	lock_acquire(&lockForEviction);
 
-	evictedFrame = findFrameForEviction();
+	evictedFrame = findFrameForEviction1();
 
 	if(evictedFrame == NULL)
 		PANIC("Can't find any Frame to evict");
@@ -97,6 +100,33 @@ void *evictFrameFor(void *page)
 
 	return evictedFrame->frame;
 }
+
+static struct frameStruct *findFrameForEviction1(void){
+	struct frameStruct *frame = NULL;
+	struct thread *t;
+	bool found = false;
+
+	for(; !found ; eclock = list_next (eclock)){
+		if(eclock == list_end(&frameTable))
+			eclock = list_begin(&frameTable);
+
+		frame = list_entry (eclock, struct frameStruct, listElement);
+		t = get_thread_from_tid(frame->tid);
+
+		if(!pagedir_is_accessed(t->pagedir, frame->page)) {
+			found = true;
+		}
+		else {
+			pagedir_set_accessed(t->pagedir, frame->page, false);
+		}
+	}
+
+	DPRINTF_FRAME("findFrameForEviction:RETURN SUCCESS\n");
+	return frame;
+}
+
+
+
 
 static struct frameStruct *findFrameForEviction(void){
 	struct frameStruct *frame = NULL;
@@ -194,7 +224,8 @@ static bool addFrameToTable(void *frame, void *page)
 	newFrameEntry->page = page;
 	
 	lock_acquire(&frameTableLock);
-	list_push_back(&frameTable, &newFrameEntry->listElement);
+	//list_push_back(&frameTable, &newFrameEntry->listElement);
+	list_insert(eclock,&newFrameEntry->listElement);
 	lock_release(&frameTableLock);
 
 	DPRINTF_FRAME("addFrameToTable:SUCCESS\n");

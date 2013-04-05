@@ -416,7 +416,11 @@ mapid_t mmap (int fd, void *addr)
 		fileStruct = thread_current()->fd_table[fd];
 	else return -1;
 
-	if((length = file_length(fileStruct)) <= 0)
+	lock_acquire(&filesys_lock);
+	length = file_length(fileStruct);
+	lock_release(&filesys_lock);
+
+	if(length <= 0)
 		return -1;
 
 	for(i = 0; i < length; i+=PGSIZE)
@@ -440,10 +444,6 @@ void munmap (mapid_t mapping)
 	mmfiles_remove (mapping);
 	DPRINTF_SYS("Completed Syscall MUNMAP\n");
 }
-
-
-
-
 
 /* This function has been used to check the address of the buffer
  * indices in read,write system call.It scans the address index of
