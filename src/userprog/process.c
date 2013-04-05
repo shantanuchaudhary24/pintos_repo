@@ -31,9 +31,6 @@ extern struct lock filesys_lock;
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 void print_pagedir(uint32_t* pagedir);
-static bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -253,7 +250,7 @@ process_exit (void)
   zombie_cleanup_on_parent_termination(cur->tid);
   // clean up zombie children processes that are dead 
   zombie_with_dead_parent_cleanup();
-  removeEntriesFor(cur);
+  removeEntriesFor(cur->tid);
   free_mmfiles(&cur->mmfiles);						// freeing the mmf table
   free_supptable(&cur->suppl_page_table); 			// freeing the supplementary table
 
@@ -583,64 +580,6 @@ static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
 }
 
 
-/*Loads a segment starting at offset OFS in FILE at address
-   UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
-   memory are initialized, as follows:
-
-        - READ_BYTES bytes at UPAGE must be read from FILE
-          starting at offset OFS.
-
-        - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
-
-   The pages initialized by this function must be writable by the
-   user process if WRITABLE is true, read-only otherwise.
-
-   Return true if successful, false if a memory allocation error
-   or disk read error occurs. */
-static bool
-load_segment (struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
-{
-  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-  ASSERT (pg_ofs (upage) == 0);
-  ASSERT (ofs % PGSIZE == 0);
-
-  file_seek (file, ofs);
-  while (read_bytes > 0 || zero_bytes > 0) 
-    {
-      /* Calculate how to fill this page.
-         We will read PAGE_READ_BYTES bytes from FILE
-         and zero the final PAGE_ZERO_BYTES bytes.*/
-      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-      size_t page_zero_bytes = PGSIZE - page_read_bytes;
-
-      /* Get a page of memory.*/
-      uint8_t *kpage = palloc_get_page (PAL_USER);
-      if (kpage == NULL)
-        return false;
-
-      /* Load this page.*/
-      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-      memset (kpage + page_read_bytes, 0, page_zero_bytes);
-
-      /* Add the page to the process's address space.*/
-      if (!install_page (upage, kpage, writable)) 
-        {
-          palloc_free_page (kpage);
-          return false; 
-        }
-
-      /* Advance.*/
-      read_bytes -= page_read_bytes;
-      zero_bytes -= page_zero_bytes;
-      upage += PGSIZE;
-    }
-  return true;
-}
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
