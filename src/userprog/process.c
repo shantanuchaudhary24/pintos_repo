@@ -691,7 +691,7 @@ void print_pagedir(uint32_t* pagedir)
     pdent = pagedir[i];
     if(pdent)
     {
-      DPRINTF("-----entry no = %d---value %x\n", i, pdent);
+//      DPRINTF("-----entry no = %d---value %x\n", i, pdent);
     }
   }
 }

@@ -1,6 +1,6 @@
 #include "userprog/mmf.h"
 #include "threads/thread.h"
-#include "lib/user/syscall.h"
+//#include "lib/user/syscall.h"
 #include "vm/page.h"
 #include "threads/malloc.h"
 #include "threads/pte.h"

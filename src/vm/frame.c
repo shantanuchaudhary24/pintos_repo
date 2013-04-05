@@ -144,7 +144,7 @@ static bool saveEvictedFrame(struct frameStruct *frame)
 
 	if(spte == NULL)
 	{
-		spte = calloc(1, sizeof(spte));
+		spte = calloc(1, sizeof(*spte));
 		spte->uvaddr = frame->page;
 		spte->page_type = SWAP;
 //		printf("NULL return in loop1\n");
