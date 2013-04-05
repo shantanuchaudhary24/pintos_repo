@@ -15,6 +15,7 @@
 #include "vm/debug.h"
 #include "userprog/mmf.h"
 #include "vm/page.h"
+#include "vm/frame.h"
 
 extern struct lock filesys_lock;
 
@@ -202,6 +203,7 @@ void process_terminate(void)
   struct thread *t = thread_current ();
   printf ("%s: exit(%d)\n", t->name, t->exit_status);  
   thread_exit();
+  removeFrameEntriesFor(t->tid);
 }
 
 

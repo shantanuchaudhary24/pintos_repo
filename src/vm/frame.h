@@ -2,11 +2,11 @@
 #include "lib/kernel/list.h"
 
 void frameInit(void);
-void *allocateFrame(enum palloc_flags FLAG, void *page);
+void *allocateFrame(enum palloc_flags flag, void *page);
 void freeFrame(void *frame);
 void *evictFrameFor(void *page);
 void setFrameAttributes(uint32_t *pte, void *kpage);
-void removeEntriesFor(tid_t t);
+void removeFrameEntriesFor(tid_t t);
 
 struct frameStruct {
 	void *frame;

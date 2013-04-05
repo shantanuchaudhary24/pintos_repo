@@ -20,7 +20,7 @@ void setFrameAttributes(uint32_t *pte, void *kpage);
 static bool addFrameToTable(void *frame, void *page);
 static void removeFrameFromTable(void *frame);
 static struct frameStruct *getFrameFromTable(void *frame);
-static struct frameStruct *findFrameForEviction(void);
+//static struct frameStruct *findFrameForEviction(void);
 static struct frameStruct *findFrameForEviction1(void);
 static bool saveEvictedFrame(struct frameStruct *frame);
 
@@ -135,7 +135,7 @@ static struct frameStruct *findFrameForEviction1(void){
 	return frame;
 }
 
-
+/*
 static struct frameStruct *findFrameForEviction(void){
 	struct frameStruct *frame = NULL;
 	struct frameStruct *temp;
@@ -169,7 +169,7 @@ static struct frameStruct *findFrameForEviction(void){
 	DPRINTF_FRAME("findFrameForEviction:RETURN SUCCESS\n");
 	return frame;
 }
-
+*/
 static bool saveEvictedFrame(struct frameStruct *frame)
 {
 	DPRINTF_FRAME("saveEvictedFrame: in\n");
@@ -270,14 +270,19 @@ static void removeFrameFromTable(void *frame)
 	lock_release(&frameTableLock);
 }
 
-void removeEntriesFor(tid_t t){
+void removeFrameEntriesFor(tid_t t){
 	struct list_elem *temp;
 	struct frameStruct *fte;
+
+	lock_acquire(&frameTableLock);
 	for(temp = list_begin(&frameTable); temp!=list_end(&frameTable); temp = list_next(temp)){
 		fte = list_entry(temp, struct frameStruct, listElement);
-		if(fte->tid == t)
-			removeFrameFromTable(fte->frame);
+		if(fte!=NULL && fte->tid == t){
+			list_remove(temp);
+			free(fte);
+		}
 	}
+	lock_release(&frameTableLock);
 }
 
 

@@ -30,7 +30,6 @@ extern struct lock filesys_lock;
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-void print_pagedir(uint32_t* pagedir);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -250,7 +249,6 @@ process_exit (void)
   zombie_cleanup_on_parent_termination(cur->tid);
   // clean up zombie children processes that are dead 
   zombie_with_dead_parent_cleanup();
-  removeEntriesFor(cur->tid);
   free_mmfiles(&cur->mmfiles);						// freeing the mmf table
   free_supptable(&cur->suppl_page_table); 			// freeing the supplementary table
 

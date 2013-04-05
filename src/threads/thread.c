@@ -313,15 +313,14 @@ thread_exit (void)
      when it call schedule_tail(). */
   intr_disable ();
   struct thread* t_cur = thread_current();
-  
   // add to zombie list
   zombie_add(t_cur->tid, t_cur->exit_status, t_cur->parent_tid);
-  
+
   // check if parent is waiting for exit_status
   // if yes then unblock it
   if(t_cur->parent_waiting)
     thread_unblock(t_cur->parent_waiting);
-  
+
   list_remove (&t_cur->allelem);
   t_cur->status = THREAD_DYING;
   schedule ();
