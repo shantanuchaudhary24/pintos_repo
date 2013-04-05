@@ -183,7 +183,7 @@ static bool saveEvictedFrame(struct frameStruct *frame)
 
 	if(spte == NULL)
 	{
-		printf("saveEvictedFrame: spte is null\n");
+		DPRINTF_FRAME("saveEvictedFrame: spte is null\n");
 		spte = calloc(1, sizeof(*spte));
 		spte->uvaddr = frame->page;
 		spte->page_type = SWAP;
@@ -196,7 +196,7 @@ static bool saveEvictedFrame(struct frameStruct *frame)
 	else if(pagedir_is_dirty (t->pagedir, spte->uvaddr) || !(spte->page_type & FILE))
 	{
 		swapSlotID = swap_out_page(spte->uvaddr);
-		printf("saveEvictedFrame: swapped out\n");
+		DPRINTF_FRAME("saveEvictedFrame: swapped out\n");
 		if(swapSlotID == SWAP_ERROR)
 			return false;
 		spte->page_type = spte->page_type | SWAP;
