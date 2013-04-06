@@ -436,19 +436,18 @@ mapid_t mmap (int fd, void *addr)
 		return -1;
 	// call insert mmfiles function (to be created in process.c)
 	mapid_t x = mmfiles_insert(addr, reopenedFile, length);
-	DPRINTF_SYS("Completed System Call Map\n");
+	DPRINTF_SYS("mmap:COMPLETE\n");
 	return x;
 }
 
 void munmap (mapid_t mapping)
 {
-	DPRINTF_SYS("In Syscall MUNMAP\n");
 	mmfiles_remove (mapping);
-	DPRINTF_SYS("Completed Syscall MUNMAP\n");
+	DPRINTF_SYS("munmap:COMPLETE\n");
 }
 
 /* This function has been used to check the address of the buffer
- * indices in read,write system call.It scans the address index of
+ * indices in write system call.It scans the address index of
  * the buffer at page size offsets.It advances on the basis of buffer
  * size.If the buffer size is zero then it terminates the loop. If the
  * buffer size is greater than 1 page then it advances by decrementing
@@ -490,6 +489,14 @@ static void buffer_check_terminate(void *buffer, unsigned size)
 	DPRINTF_SYS("buffer_check_terminate:PASSED\n");
 }
 
+/* This function has been used to check the address of the buffer
+ * indices in read system call.It scans the address index of
+ * the buffer at page size offsets.It advances on the basis of buffer
+ * size.If the buffer size is zero then it terminates the loop. If the
+ * buffer size is greater than 1 page then it advances by decrementing
+ * buffer size by 1 page size.And if the size of buffer is less than 1
+ * page then it just jumps to the end of the buffer.
+ * */
 void buffer_check_write(void *buffer,unsigned size)
 {
 	int get_value=get_valid_val(buffer);
@@ -530,7 +537,7 @@ void buffer_check_write(void *buffer,unsigned size)
 }
 
 /* Checks the validity of the string
- * terminates the process is address is invalid
+ * terminates the process if address is invalid
  * */
 void string_check_terminate(char* str)
 {
@@ -557,7 +564,7 @@ void string_check_terminate(char* str)
 
 /* Verifies the addresses passed to it by checking if they are
  * not NULL as well as not lying in the kernel space above PHYS_BASE.
- * Then it uses get_user() to get the calue stored at the passed
+ * Then it uses get_user() to get the value stored at the passed
  * address. */
 static int
 get_valid_val(int *uaddr)
@@ -584,7 +591,11 @@ get_user (const int *uaddr)
   return result;
 }
 
-
+/* Function for checking the address before
+ * being passed to the put_user function.
+ * Checks if the address is NULL or is greater
+ * than PHYS_BASE
+ * */
 static bool put_valid_val(int *uaddr,int byte)
 {
   if(!is_user_vaddr((void *)uaddr) || uaddr==NULL  )

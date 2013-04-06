@@ -1,4 +1,7 @@
-//#define DEBUG_EXCEPTION						/* For Debugging purposes*/
+								/* For Debugging purposes*/
+/* Comment out the required macro and debug statements will be printed of the appropriate file*/
+
+//#define DEBUG_EXCEPTION
 //#define DEBUG_PAGE
 //#define DEBUG_SWAP
 //#define DEBUG_FRAME

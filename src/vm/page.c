@@ -17,6 +17,7 @@
 #include "vm/debug.h"
 #include "vm/page.h"
 
+/* Filesystem Lock*/
 extern struct lock filesys_lock;
 
 static bool load_page_swap(struct supptable_page *page_entry);
@@ -38,7 +39,7 @@ bool init_supptable(struct hash *table)
 
 /* Function to add page to suppl. table by checking if pointer 
  * to the table or page_entry passed to it isn't NULL. It then uses
- * hash functions to insert the entry in the hash table and returns
+ * hash_insert function to insert the entry in the hash table and returns
  * result appropriately.
  * */
 bool supptable_add_page(struct hash *table,struct supptable_page *page_entry)
@@ -52,7 +53,7 @@ bool supptable_add_page(struct hash *table,struct supptable_page *page_entry)
 	else return false;
 }
 
-/* This function adds the data into the supplementary page
+/* This function adds the file data into the supplementary page
  * table.It determines the type of file(namely FILE,MMF,SWAP)
  * and adds it to the database of suppl. page table using hash_insert
  * function.The function returns true if it is able to insert the file
@@ -75,11 +76,11 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 	page_entry->writable=writable;
 	page_entry->is_page_loaded=false;
 
-	//DPRINT_PAGE("supptable_add_file: ENTRY ADDR:%x\n",(uint32_t)(page_entry->uvaddr));
+	DPRINT_PAGE("supptable_add_file:ENTRY ADDR:%x\n",(uint32_t)(page_entry->uvaddr));
 
 	if(hash_insert(&t->suppl_page_table,&page_entry->hash_index)==NULL)
 	{
-		//DPRINTF_PAGE("supptable_add_file:PAGE ADDED.\n");
+		DPRINTF_PAGE("supptable_add_file:PAGE ADDED.\n");
 		return true;
 	}
 	else
@@ -89,7 +90,11 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 	}
 }
 
-
+/* Function requires when a dirty pagedir is encountered.
+ * It just seeks to the required offset and writes the contents of
+ * the address to the file passes to it from the suppl page table
+ * entry.
+ * */
 void write_page_to_file(struct supptable_page *page_entry)
 {
 	if(page_entry->page_type & MMF)

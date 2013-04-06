@@ -20,7 +20,6 @@ void setFrameAttributes(uint32_t *pte, void *kpage);
 static bool addFrameToTable(void *frame, void *page);
 static void removeFrameFromTable(void *frame);
 static struct frameStruct *getFrameFromTable(void *frame);
-//static struct frameStruct *findFrameForEviction(void);
 static struct frameStruct *findFrameForEviction1(void);
 static bool saveEvictedFrame(struct frameStruct *frame);
 
@@ -83,7 +82,6 @@ void *evictFrameFor(void *page)
 {
 	struct frameStruct *evictedFrame;
 
-//	printf("about to acquire lockForEviction\n");
 	lock_acquire(&frameTableLock);
 	DPRINTF_FRAME("evictFrameFor: successfuly acquired lockForEviction\n");
 
@@ -117,13 +115,10 @@ static struct frameStruct *findFrameForEviction1(void){
 
 		frame = list_entry (eclock, struct frameStruct, listElement);
 		ASSERT(frame != NULL);
-//		printf("tid = %d\n", frame->tid);
 		t = get_thread_from_tid(frame->tid);
 		ASSERT(t != NULL);
 		accessed = pagedir_is_accessed(t->pagedir, frame->page);
-//		printf("findFrameForEviction: get thread\n");
 		if(!accessed) {
-//			printf("findFrameForEviction: accessed = false\n");
 			found = true;
 		}
 		else {

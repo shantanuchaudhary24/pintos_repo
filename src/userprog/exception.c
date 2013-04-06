@@ -101,11 +101,12 @@ kill (struct intr_frame *f)
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
-        if((((uint32_t)f->eax-(uint32_t)f->eip)==2) || (((uint32_t)f->eax-(uint32_t)f->eip)==3))
+        /* If we had come from put_user or get_user function*/
+    	if((((uint32_t)f->eax-(uint32_t)f->eip)==2) || (((uint32_t)f->eax-(uint32_t)f->eip)==3))
         {
         	f->eip=(void *)f->eax;
         	f->eax=(-1);
-        }else
+        }else /* PANIC THE KERNEL:There is some bug*/
         {
         	PANIC("UNEXPECTED BUG IN KERNEL");
         }
@@ -151,6 +152,8 @@ page_fault (struct intr_frame *f)
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
+
+  /* Printing the causes for debugging*/
   DPRINT_EXCEP("page_fault:not_present:%d\n",not_present);
   DPRINT_EXCEP("page_fault:write:%d\n",write);
   DPRINT_EXCEP("page_fault:user:%d\n",user);
@@ -164,8 +167,8 @@ page_fault (struct intr_frame *f)
   	   * we consult the supplementary page table to fetch the appropriate page
   	   * corresponding to the fault address.We load the entry corresponding to the
   	   * page(depending upon swap,file,mmf as needed).Otherwise we check for read/write
-  	   * access and check if stack needs to be grown.In the final case we set the page
-  	   * in the page directory or terminate if it fails.
+  	   * access and check if stack needs to be grown.If all these case fail, terminate the
+  	   * process.
   	   * */
 	  case SEL_UCSEG:
   		  DPRINT_EXCEP("page_fault:UCSEG:fault_addr:%x\n",(uint32_t)fault_addr);
@@ -175,18 +178,16 @@ page_fault (struct intr_frame *f)
   			  DPRINTF_EXCEP("page_fault:UCSEG:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
   			  t->exit_status=-1;
   			  process_terminate();
-
   		  }
   		  else
   		  {
+  			  /* Demand paging is done here*/
   			  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
   			  DPRINT_EXCEP("page_fault:UCSEG:Getting correct Entry Addr:%x\n",(uint32_t)page_entry->uvaddr);
   			  if(page_entry!=NULL && !page_entry->is_page_loaded)
   			  {
   				  if(load_supptable_page(page_entry)==false)
-  				  {
   					  DPRINTF_EXCEP("page_fault:UCSEG:LOAD PAGE FAILED\n");
-  				  }
   			  }
   			  else if(page_entry==NULL && ((int *)fault_addr>=(int *)(f->esp)-8) && (pg_round_down(f->esp)>=(PHYS_BASE-STACK_SIZE)))
   			  {
@@ -202,17 +203,20 @@ page_fault (struct intr_frame *f)
   	   * If there is any violation, we terminate the process.Next
   	   * we consult the supplementary page table to fetch the appropriate page
   	   * corresponding to the fault address.We load the entry corresponding to the
-  	   * page(depending upon swap,file,mmf as needed).Otherwise we check for read/write
-  	   * access and check if stack needs to be grown(using the saved stack pointer).In
-  	   * the final case we set the page in the page directory or terminate if it fails.
+  	   * page(depending upon swap,file,mmf as needed).Otherwise we check if stack needs to
+  	   * be grown(using the saved stack pointer).In the final case we move to kill(f) to
+  	   * determine if the bug was from get_user/put_user function and swap eip/eax or we
+  	   * panic the kernel if there is a bug.
   	   * */
 	  case SEL_KCSEG:
-  		  DPRINT_EXCEP("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
+  		  	  	  	  	  	  	  /* For debugging */
+		  DPRINT_EXCEP("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
   		  DPRINT_EXCEP("page_fault:KERNEL t->stack addr:%x\n",(uint32_t)t->stack);
   		  DPRINT_EXCEP("is_user_vaddr(fault_addr):%d\n",is_user_vaddr(fault_addr));
   		  DPRINT_EXCEP("EIP is:%x\n",(uint32_t)f->eip);
   		  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
   		  {
+  			  DPRINTF_EXCEP("page_fault:KCSEG:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
   			  t->exit_status=-1;
   			  process_terminate();
   		  }

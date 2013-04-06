@@ -16,13 +16,14 @@ void swap_in_page(size_t swap_slot,void *vaddr);
 void swap_clear_slot(size_t swap_slot);
 void destroy_swap_space(void);
 size_t bitmap_table_size(void);
+
 /* Initialize the swap space which consists
  * of the swap disk and swap table(bitmap structure).
  * If swap disk assignment fails, it returns NULL.
- * f swap disk is assigned then it creates a bitmap table
+ * If swap disk is assigned then it creates a bitmap table
  * for representing swap table.The bit count is decided by
  * determining number of pages the swap device can contain(refer swap.h).
- * At the end initializes the swap table bits to true.
+ * At the end initializes the swap table bits to false.
  * */
 void init_swap_space(void)
 {
@@ -52,7 +53,7 @@ void destroy_swap_space(void)
 
 /* Finds an empty slot in the swap table and write the page
  * represented by vaddr into the empty swap slot of the swap
- * disk.It returns a custom macro SWAP_ERROR if writing to the
+ * disk.It returns SWAP_ERROR if writing to the
  * swap disk fails. On success it returns the swap table slot.
  * */
 size_t swap_out_page(void *vaddr)
@@ -60,12 +61,12 @@ size_t swap_out_page(void *vaddr)
     void* buffer;
     block_sector_t sector;
     DPRINTF_SWAP("swap_out_page:BEGIN\n");
-//    lock_acquire(&swap_lock);
+    lock_acquire(&swap_lock);
     size_t swap_slot=bitmap_scan(swap_space->swap_table,SWAP_TABLE_START,SWAP_TABLE_CNT,false);
     
     if (swap_slot==BITMAP_ERROR)
     {
-//    	lock_release(&swap_lock);
+    	lock_release(&swap_lock);
     	PANIC("swap_out_page:SWAP SLOT ERROR\n");
     	return SWAP_ERROR;
     }
@@ -78,13 +79,13 @@ size_t swap_out_page(void *vaddr)
         block_write(swap_space->swap_disk,sector,buffer);
     }
     bitmap_mark(swap_space->swap_table,swap_slot);
-//    lock_release(&swap_lock);
+    lock_release(&swap_lock);
     return swap_slot;
 }
 
 /* Swaps a page of data in a slot represented by swap_slot to
  * a page pointed by vaddr by reading(block_read) from the swap_disk.
- * Flip the corresponding swap slot bit in the swap table bitmap.
+ * Resets the corresponding swap slot bit in the swap table bitmap.
  * */
 void swap_in_page(size_t swap_slot,void *vaddr)
 {
@@ -92,7 +93,7 @@ void swap_in_page(size_t swap_slot,void *vaddr)
 	block_sector_t sector;
 	size_t counter=0;
 	DPRINTF_SWAP("swap_in_page:BEGIN\n");
-//	lock_acquire(&swap_lock);
+	lock_acquire(&swap_lock);
 	for(counter=0;counter<NUM_SECTORS_PER_PAGE;counter++)
 	{
 		sector=swap_slot*NUM_SECTORS_PER_PAGE+counter;
@@ -100,16 +101,16 @@ void swap_in_page(size_t swap_slot,void *vaddr)
 		block_read(swap_space->swap_disk,sector,buffer);
 	}
 	bitmap_reset(swap_space->swap_table,swap_slot);
-//	lock_release(&swap_lock);
+	lock_release(&swap_lock);
 }
 
-/* Just flips the bit pointed by swap_slot.This is needed
+/* Resets the bit pointed by swap_slot.This is needed
  * when a page is freed from the supplementary table.
  * */
 void swap_clear_slot(size_t swap_slot)
 {
 	DPRINTF_SWAP("swap_clear_slot:BEGIN\n");
-//	lock_acquire(&swap_lock);
+	lock_acquire(&swap_lock);
 	if(bitmap_test(swap_space->swap_table,swap_slot)==true)
 	{
 		DPRINTF_SWAP("swap_clear_slot:SWAP SLOT CLEARED\n");
@@ -118,9 +119,11 @@ void swap_clear_slot(size_t swap_slot)
 	else {
 		DPRINTF_SWAP("swap_clear_slot:SWAP SLOT ALREADY CLEAR\n");
 	}
-//	lock_release(&swap_lock);
+	lock_release(&swap_lock);
 }
 
+/* Function for determining the swap table size
+ * */
 size_t bitmap_table_size(void)
 {
 	size_t bit_cnt=0;

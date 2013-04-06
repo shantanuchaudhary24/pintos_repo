@@ -236,6 +236,7 @@ process_wait (tid_t child_tid)
       intr_enable();
     }
   }
+  return 0;
 }
 
 /* Free the current process's resources. */
@@ -244,13 +245,13 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  
+  free_mmfiles(&cur->mmfiles);						// freeing the mmf table
+  free_supptable(&cur->suppl_page_table); 			// freeing the supplementary table
+
   // clean up zombie children of this process
   zombie_cleanup_on_parent_termination(cur->tid);
   // clean up zombie children processes that are dead 
   zombie_with_dead_parent_cleanup();
-  free_mmfiles(&cur->mmfiles);						// freeing the mmf table
-  free_supptable(&cur->suppl_page_table); 			// freeing the supplementary table
 
 
 
@@ -412,7 +413,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      printf ("load: %s: error loading executable\n", file_name);
+      DPRINT_PROC("load: %s: error loading executable\n", file_name);
       lock_release(&filesys_lock);
       goto done; 
     }
@@ -549,6 +550,10 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
   return true;
 }
 
+/* For lazy loading of executables.Seeks the file to required offset
+ * and adds the file page by page with appropriate read_bytes and zero
+ * bytes to the supplementary page table of the process.
+ * */
 static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
               uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
@@ -568,6 +573,7 @@ static bool lazy_load_segment(struct file *file, off_t ofs, uint8_t *upage,
         	DPRINTF_PROC("lazy_load_segment:SUPP_TABLE ADD FAIL\n");
         	return false;
         }
+        /* Loop ahead*/
         read_bytes-=page_read_bytes;
         zero_bytes-=page_zero_bytes;
         ofs+=page_read_bytes;
@@ -588,7 +594,6 @@ setup_stack (void **esp)
   bool success = false;
   DPRINTF_PROC("setup_stack_vm:BEGIN\n");
   kpage = allocateFrame(PAL_USER | PAL_ZERO,*esp);
-  //kpage=palloc_get_page(PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
@@ -601,7 +606,6 @@ setup_stack (void **esp)
       {
     	  DPRINTF_PROC("setup_stack_vm:FAIL\n");
     	  freeFrame(kpage);
-    	  //palloc_free_page(kpage);
       }
     }
   return success;
