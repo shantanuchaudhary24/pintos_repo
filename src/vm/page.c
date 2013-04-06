@@ -27,6 +27,8 @@ static void supptable_free_page(struct hash_elem *element, void *aux UNUSED);
 static unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less (const struct hash_elem *a_, const struct hash_elem *b_,void *aux UNUSED);
 
+static bool load_file(struct supptable_page *page_entry);
+static bool set_page_suppl(struct supptable_page *page_entry, void *kpage,struct thread *t);
 /* This function initialises the supplementary table
  * by call hash_init which is complimented by the use of
  * page_has and page_less functions.It returns true on success
@@ -187,12 +189,12 @@ bool load_supptable_page(struct supptable_page *page_entry)
 	{
 		case FILE:
 			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_FILE\n");
-			result=load_page_file(page_entry);
+			result=load_file(page_entry);
 			break;
 		case MMF | SWAP:
 		case MMF:
 			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_MMF\n");
-			result=load_page_mmf(page_entry);
+			result=load_file(page_entry);
 			break;
 		case FILE | SWAP:
 		case SWAP:
@@ -204,10 +206,83 @@ bool load_supptable_page(struct supptable_page *page_entry)
 }
 
 /* Extension of load_supptable_page function to load a page
- * from swap space into the page table.Allocates a frame based
- * upon the page type, maps the frame to the page table entry.
- * Frees it if the mapping fails.It then swaps the data from
- * disk into the memory page table.After swap in, if the page
+ * from disk space into the memory page table.Allocates a frame
+ * based upon the page type.Frees it if the mapping fails.
+ * It then loads the EXECUTABLE file into the frame specified by kpage.
+ * It then zeroes out memory at kpage + the supplementary
+ * page read_bytes. Then it ,adds the page to the process's address
+ * space. If the load is successful this function returns true
+ * else returns false.Depending upon the bits set in page_type we mark
+ * the page to be in FILE/MMF.
+ * */
+static bool load_file(struct supptable_page *page_entry)
+{
+	DPRINT_PAGE("load_page_file:PAGE UVADDR:%x\n",(uint32_t)page_entry->uvaddr);
+	void *kpage;
+	int ret=0;
+	struct thread *t=thread_current();
+
+	lock_acquire(&filesys_lock);
+	file_seek (page_entry->file, page_entry->offset);
+	kpage= allocateFrame(PAL_USER,page_entry->uvaddr);
+	if (kpage == NULL)
+	{
+		DPRINTF_PAGE("load_page_file:FRAME ALLOC. FAILED\n");
+		lock_release(&filesys_lock);
+		return false;
+	}
+
+	ret=file_read(page_entry->file,kpage,page_entry->read_bytes);
+	lock_release(&filesys_lock);
+	if (ret!= (int)page_entry->read_bytes)
+	{
+		DPRINTF_PAGE("load_page_file:FILE_READ FAIL:");
+		freeFrame(kpage);
+	    return false;
+	}
+
+	memset(kpage + page_entry->read_bytes, 0,page_entry->zero_bytes);
+
+	return set_page_suppl(page_entry,kpage,t);
+}
+
+
+static bool set_page_suppl(struct supptable_page *page_entry, void *kpage,struct thread *t)
+{
+	if((page_entry->page_type & (MMF|SWAP)) || (page_entry->page_type & MMF))
+	{
+		if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage, true))
+		{
+			freeFrame (kpage);
+			DPRINTF_PAGE("Load Page MMF: false : couldn't set pagedir entry\n");
+			return false;
+		}
+
+		page_entry->is_page_loaded = true;
+		if (page_entry->page_type & SWAP)
+			page_entry->page_type = MMF;
+		return true;
+	}
+
+	if(page_entry->page_type & FILE)
+	{
+		if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->writable))
+		{
+			DPRINTF_PAGE("load_page_file:FREE FRAME");
+			freeFrame (kpage);
+			return false;
+		}
+		page_entry->is_page_loaded = true;
+		return true;
+	}
+	PANIC("set_page");
+	return false;
+}
+
+/* Extension of load_supptable_page function to load a page
+ * from swap space into the page table. Allocates a frame corresponding
+ * the address passed to it.Maps the frame to the page directory.
+ * Frees it if the mapping fails.After swap in, if the page
  * was a swap page, we remove the corresponding entry from suppl
  * page table. If it is on the disk then we set the page type
  * and leave it in the suppl. table. If the load is successful
@@ -219,9 +294,8 @@ static bool load_page_swap(struct supptable_page *page_entry)
 	void *kpage;
 	kpage = allocateFrame(PAL_USER,page_entry->uvaddr);
 	if (kpage == NULL)
-	{
 		return false;
-	}
+
 	if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->swap_writable))
 	{
 		freeFrame (kpage);
@@ -242,9 +316,9 @@ static bool load_page_swap(struct supptable_page *page_entry)
 
 /* Extension of load_supptable_page function to load a page
  * from disk space into the memory page table.Allocates a frame
- * based upon the page type, maps the frame to the page table entry.
- * Frees it if the mapping fails.It then loads the file from
- * disk into the memory page table.It then zeroes out the suppl
+ * based upon the page type.Frees it if the mapping fails.
+ * It then loads the EXECUTABLE file into the frame specified by kpage.
+ * It then zeroes out memory at kpage + the supplementary
  * page read_bytes. Then it ,adds the page to the process's address
  * space. If the load is successful this function returns true
  * else returns false.
