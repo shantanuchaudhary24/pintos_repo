@@ -157,26 +157,12 @@ static struct frameStruct *findFrameForEviction(void){
  * */
 static bool saveEvictedFrame(struct frameStruct *frame) {
 	
-	DPRINTF_FRAME("saveEvictedFrame: enter\n");
+	DPRINTF_FRAME("saveEvictedFrame: ENTER\n");
 	
 	struct thread *t = get_thread_from_tid(frame->tid);
 	ASSERT(t!=NULL);
 	struct supptable_page *spte = get_supptable_page(&t->suppl_page_table, frame->page,t);
 	size_t swapSlotID = 0;
-
-	if(spte == NULL) {
-		
-		DPRINTF_FRAME("saveEvictedFrame: spte is null\n");
-		
-		spte = calloc(1, sizeof(*spte));
-		spte->uvaddr = frame->page;
-		spte->page_type = SWAP;
-		
-		if(!supptable_add_page(&t->suppl_page_table, spte, t))
-			return false;
-		
-		DPRINTF_FRAME("saveEvictedFrame: spte added to supp_table\n");
-	}
 
 	if(pagedir_is_dirty(t->pagedir, spte->uvaddr) && (spte->page_type & MMF))
 		write_page_to_file(spte);
@@ -193,12 +179,12 @@ static bool saveEvictedFrame(struct frameStruct *frame) {
 	}
 	
 	DPRINTF_FRAME("saveEvictedFrame: frame saved\n");
-	
+	pagedir_clear_page(t->pagedir, spte->uvaddr);
+
 	memset(frame->frame, 0, PGSIZE);
 	spte->swap_slot_index = swapSlotID;
 	spte->swap_writable =*frame->pageTableEntry & PTE_W;
 	spte->is_page_loaded = false;
-	pagedir_clear_page(t->pagedir, spte->uvaddr);
 
 	DPRINTF_FRAME("saveEvictedFrame: out\n");
 	

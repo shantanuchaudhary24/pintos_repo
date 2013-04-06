@@ -304,12 +304,6 @@ static bool load_page_swap(struct supptable_page *page_entry,struct thread *t)
 	}
 
 	swap_in_page(page_entry->swap_slot_index, page_entry->uvaddr);
-    if (page_entry->page_type & SWAP)
-    {
-    	lock_acquire(&t->suppl_table_lock);
-    	hash_delete (&t->suppl_page_table, &page_entry->hash_index);
-    	lock_release(&t->suppl_table_lock);
-    }
 
 	if (page_entry->page_type & (FILE | SWAP))
 	{
