@@ -35,7 +35,7 @@ mapid_t mmfiles_insert (void *addr, struct file* file, int32_t len){
 	mmf->begin_addr = addr;
 	
 	for(;len > 0; len-=PGSIZE){
-		if(!supptable_add_file(MMF, file, ((i)*PGSIZE), (addr + (i)*PGSIZE), (len < PGSIZE ? len : PGSIZE), 0, NULL))
+		if(!supptable_add_file(t,MMF, file, ((i)*PGSIZE), (addr + (i)*PGSIZE), (len < PGSIZE ? len : PGSIZE), 0, NULL))
 			return -1;
 		i++;
 	}

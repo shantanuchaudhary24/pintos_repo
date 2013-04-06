@@ -20,11 +20,11 @@
 /* Filesystem Lock*/
 extern struct lock filesys_lock;
 
-static bool load_page_swap(struct supptable_page *page_entry);
+static bool load_page_swap(struct supptable_page *page_entry,struct thread *t);
 static void supptable_free_page(struct hash_elem *element, void *aux UNUSED);
 static unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less (const struct hash_elem *a_, const struct hash_elem *b_,void *aux UNUSED);
-static bool load_file(struct supptable_page *page_entry);
+static bool load_file(struct supptable_page *page_entry,struct thread *t);
 static bool set_page_suppl(struct supptable_page *page_entry, void *kpage,struct thread *t);
 
 /* This function initialises the supplementary table
@@ -42,12 +42,14 @@ bool init_supptable(struct hash *table)
  * hash_insert function to insert the entry in the hash table and returns
  * result appropriately.
  * */
-bool supptable_add_page(struct hash *table,struct supptable_page *page_entry)
+bool supptable_add_page(struct hash *table,struct supptable_page *page_entry,struct thread *t)
 {
 	struct hash_elem *temp;
 	if(table==NULL || page_entry==NULL)
 		return false;
+	lock_acquire(&t->suppl_table_lock);
 	temp=hash_insert(table,&page_entry->hash_index);
+	lock_release(&t->suppl_table_lock);
 	if(temp==NULL)
 		return true;
 	else return false;
@@ -59,9 +61,8 @@ bool supptable_add_page(struct hash *table,struct supptable_page *page_entry)
  * function.The function returns true if it is able to insert the file
  * data into the table.
  * */
-bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+bool supptable_add_file(struct thread *t, int type,struct file *file, off_t ofs, uint8_t *upage,uint32_t read_bytes, uint32_t zero_bytes, bool writable)
 {
-	struct thread *t=thread_current();
 	struct supptable_page *page_entry;
 	page_entry=malloc(sizeof(struct supptable_page));
 	if(file==NULL || upage==NULL || page_entry==NULL)
@@ -77,15 +78,17 @@ bool supptable_add_file(int type,struct file *file, off_t ofs, uint8_t *upage,ui
 	page_entry->is_page_loaded=false;
 
 	DPRINT_PAGE("supptable_add_file:ENTRY ADDR:%x\n",(uint32_t)(page_entry->uvaddr));
-
+	lock_acquire(&t->suppl_table_lock);
 	if(hash_insert(&t->suppl_page_table,&page_entry->hash_index)==NULL)
 	{
 		DPRINTF_PAGE("supptable_add_file:PAGE ADDED.\n");
+		lock_release(&t->suppl_table_lock);
 		return true;
 	}
 	else
 	{
 		DPRINTF_PAGE("supptable_add_file:PAGE ALREADY EXISTS");
+		lock_release(&t->suppl_table_lock);
 		return false;
 	}
 }
@@ -111,22 +114,26 @@ void write_page_to_file(struct supptable_page *page_entry)
  * It returns the corresponding page on successfully finding it else it returns
  * NULL.
  * */
-struct supptable_page *get_supptable_page(struct hash *table, void *vaddr)
+struct supptable_page *get_supptable_page(struct hash *table, void *vaddr,struct thread *t)
 {
 	struct hash_elem *temp_hash_elem;
+	struct supptable_page *page_ptr;
 	struct supptable_page page_entry;
 
+	lock_acquire(&t->suppl_table_lock);
 	page_entry.uvaddr=vaddr;
 	temp_hash_elem=hash_find(table,&page_entry.hash_index);
-
 	if(temp_hash_elem!=NULL)
 	{
 		DPRINT_PAGE("get_supptable_page:RETURN PAGE->VADDR:%x\n",(uint32_t)vaddr);
-		return hash_entry(temp_hash_elem,struct supptable_page,hash_index);
+		page_ptr=hash_entry(temp_hash_elem,struct supptable_page,hash_index);
+		lock_release(&t->suppl_table_lock);
+		return page_ptr;
 	}
 	else
 	{
 		DPRINTF_PAGE("get_supptable_page:NULL RETURN\n");
+		lock_release(&t->suppl_table_lock);
 		return NULL;
 	}
 }
@@ -161,9 +168,8 @@ static void supptable_free_page(struct hash_elem *element, void *aux UNUSED)
  * passed to it.It then sets the page corresponding to the frame.Returns
  * false on failure and frees the alloted frame.
  * */
-void grow_stack(void *vaddr)
+void grow_stack(void *vaddr,struct thread *t)
 {
-	struct thread *t=thread_current();
 	void *temp_frame;
 	temp_frame= allocateFrame(PAL_USER|PAL_ZERO,vaddr);
 	if(temp_frame==NULL)
@@ -180,7 +186,7 @@ void grow_stack(void *vaddr)
  * passed to it and then calls the corresponding functions.
  * Returns true on success and false on failure.
  * */
-bool load_supptable_page(struct supptable_page *page_entry)
+bool load_supptable_page(struct supptable_page *page_entry, struct thread *t)
 {
 	bool result=false;
 	switch(page_entry->page_type)
@@ -188,12 +194,12 @@ bool load_supptable_page(struct supptable_page *page_entry)
 		case FILE:
 		case MMF | SWAP:
 		case MMF:
-			result=load_file(page_entry);
+			result=load_file(page_entry,t);
 			break;
 		case FILE | SWAP:
 		case SWAP:
 			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_SWAP\n");
-			result=load_page_swap(page_entry);
+			result=load_page_swap(page_entry,t);
 			break;
 	}
 	return result;
@@ -209,12 +215,11 @@ bool load_supptable_page(struct supptable_page *page_entry)
  * else returns false.Depending upon the bits set in page_type we mark
  * the page to be in FILE/MMF.
  * */
-static bool load_file(struct supptable_page *page_entry)
+static bool load_file(struct supptable_page *page_entry,struct thread *t)
 {
 	DPRINT_PAGE("load_page_file:PAGE UVADDR:%x\n",(uint32_t)page_entry->uvaddr);
 	void *kpage;
 	int ret=0;
-	struct thread *t=thread_current();
 
 	lock_acquire(&filesys_lock);
 	file_seek (page_entry->file, page_entry->offset);
@@ -285,9 +290,8 @@ static bool set_page_suppl(struct supptable_page *page_entry, void *kpage,struct
  * and leave it in the suppl. table. If the load is successful
  * this function returns true else returns false
  * */
-static bool load_page_swap(struct supptable_page *page_entry)
+static bool load_page_swap(struct supptable_page *page_entry,struct thread *t)
 {
-	struct thread *t=thread_current();
 	void *kpage;
 	kpage = allocateFrame(PAL_USER,page_entry->uvaddr);
 	if (kpage == NULL)
@@ -301,7 +305,11 @@ static bool load_page_swap(struct supptable_page *page_entry)
 
 	swap_in_page(page_entry->swap_slot_index, page_entry->uvaddr);
     if (page_entry->page_type & SWAP)
+    {
+    	lock_acquire(&t->suppl_table_lock);
     	hash_delete (&t->suppl_page_table, &page_entry->hash_index);
+    	lock_release(&t->suppl_table_lock);
+    }
 
 	if (page_entry->page_type & (FILE | SWAP))
 	{

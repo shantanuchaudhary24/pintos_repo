@@ -182,11 +182,11 @@ page_fault (struct intr_frame *f)
   		  else
   		  {
   			  /* Demand paging is done here*/
-  			  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
+  			  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr),t);
   			  DPRINT_EXCEP("page_fault:UCSEG:Getting correct Entry Addr:%x\n",(uint32_t)page_entry->uvaddr);
   			  if(page_entry!=NULL && !page_entry->is_page_loaded)
   			  {
-  				  if(load_supptable_page(page_entry)==false)
+  				  if(load_supptable_page(page_entry,t)==false)
   					  {
   					  	  DPRINTF_EXCEP("page_fault:UCSEG:LOAD PAGE FAILED\n");
   					  }
@@ -194,7 +194,7 @@ page_fault (struct intr_frame *f)
   			  else if(page_entry==NULL && ((int *)fault_addr>=(int *)(f->esp)-8) && (pg_round_down(f->esp)>=(PHYS_BASE-STACK_SIZE)))
   			  {
   				  DPRINTF_EXCEP("page_fault:UCSEG:GROW STACK\n");
-  				  grow_stack(fault_addr);
+  				  grow_stack(fault_addr,t);
   			  }
   			  else kill(f);
   		  }
@@ -224,16 +224,16 @@ page_fault (struct intr_frame *f)
   		  }
   		  else
   		  {
-  			  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr));
+  			  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr),t);
   			  if(page_entry!=NULL && !page_entry->is_page_loaded)
   			  {
   				  DPRINTF_EXCEP("page_fault:KCSEG:LOAD PAGE\n");
-  				  load_supptable_page(page_entry);
+  				  load_supptable_page(page_entry,t);
   			  }
   			  else if(page_entry == NULL && ((int *)fault_addr>=((int *)(t->stack))-8) && (pg_round_down(t->stack)>=(PHYS_BASE-STACK_SIZE)))
   			  {
   				  DPRINTF_EXCEP("page_fault:KCSEG:GROW STACK\n");
-  				  grow_stack(fault_addr);
+  				  grow_stack(fault_addr,t);
   			  }
   			  else kill(f);
   		  }break;

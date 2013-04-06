@@ -426,7 +426,7 @@ mapid_t mmap (int fd, void *addr)
 		return -1;
 
 	for(i = 0; i < length; i+=PGSIZE)
-		if(get_supptable_page(&t->suppl_page_table, addr + i) || pagedir_get_page(t->pagedir, addr + i))
+		if(get_supptable_page(&t->suppl_page_table, addr + i,t) || pagedir_get_page(t->pagedir, addr + i))
 			return -1;
 	lock_acquire(&filesys_lock);
 	reopenedFile = file_reopen(fileStruct);

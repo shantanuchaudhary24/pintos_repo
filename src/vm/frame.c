@@ -170,7 +170,7 @@ static bool saveEvictedFrame(struct frameStruct *frame)
 	DPRINTF_FRAME("saveEvictedFrame: in\n");
 	struct thread *t = get_thread_from_tid(frame->tid);
 	DPRINTF_FRAME("saveEvictedFrame: success in getting thread\n");
-	struct supptable_page *spte = get_supptable_page(&t->suppl_page_table, frame->page);
+	struct supptable_page *spte = get_supptable_page(&t->suppl_page_table, frame->page,t);
 	DPRINTF_FRAME("saveEvictedFrame: success in getting supptable_pte\n");
 	size_t swapSlotID = 0;
 
@@ -182,7 +182,7 @@ static bool saveEvictedFrame(struct frameStruct *frame)
 		
 		spte->uvaddr = frame->page;
 		spte->page_type = SWAP;
-		if(!supptable_add_page(&t->suppl_page_table, spte))
+		if(!supptable_add_page(&t->suppl_page_table, spte,t))
 			return false;
 		DPRINTF_FRAME("saveEvictedFrame: spte added to supp_table\n");
 	}

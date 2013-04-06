@@ -90,7 +90,7 @@ This lock is used to manage the access to swap space device and swap table.
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
 We haven't implemented sharing of frames. So, this problem doesn't arise.
-
+But if this would have been the case then copy on write would be the solution.
 ---- SYNCHRONIZATION ----
 
 >> A4: When two user processes both need a new frame at the same time,
@@ -175,6 +175,8 @@ set in the syscall_handler function.
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
 
+
+
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
@@ -185,12 +187,26 @@ set in the syscall_handler function.
 >> cannot interfere by e.g. attempting to evict the frame while it is
 >> still being read in?
 
+The locks which we have used on the frame table and swap ensure this
+atomicity. At a time only one process can access and modify the frame
+table or the swap table(whichever it needs to access/modify).Also we
+have a supplementary page table lock which checks the atomicity of access
+to supplementary table of a process, if it is altered by any other process.
+(Example in case of eviction.)
+
 >> B8: Explain how you handle access to paged-out pages that occur
 >> during system calls.  Do you use page faults to bring in pages (as
 >> in user programs), or do you have a mechanism for "locking" frames
 >> into physical memory, or do you use some other design?  How do you
 >> gracefully handle attempted accesses to invalid virtual addresses?
 
+We handle the access to paged out pages that occur during system calls
+using page faults.In the page_fault we have the code for fetching the
+page by consulting the supplementary page table.So when there is an
+invalid access and a page fault occurs, we identify the type of fault.
+If the fault was due to a system call then we would land in the KCSEG 
+part of the fault and from there we can demand page the address at which
+fault occured.
 
 ---- RATIONALE ----
 

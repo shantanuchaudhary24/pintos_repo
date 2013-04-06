@@ -122,6 +122,7 @@ struct thread
     struct file* fi;                    //  executables file pointer
 
     struct hash suppl_page_table;
+    struct lock suppl_table_lock;
     uint32_t exit_status;               // exit status of the process
     tid_t parent_tid;                   // tid of its parent 
     struct thread* parent_waiting;      // parent has called wait() and is blocked 
