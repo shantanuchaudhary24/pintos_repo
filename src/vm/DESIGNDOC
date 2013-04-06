@@ -85,22 +85,27 @@ This lock is used to manage the access to swap space device and swap table.
 >> A2: In a few paragraphs, describe your code for locating the frame,
 >> if any, that contains the data of a given page.
 
-
 >> A3: How does your code coordinate accessed and dirty bits between
 >> kernel and user virtual addresses that alias a single frame, or
 >> alternatively how do you avoid the issue?
 We haven't implemented sharing of frames. So, this problem doesn't arise.
 But if this would have been the case then copy on write would be the solution.
+
 ---- SYNCHRONIZATION ----
 
 >> A4: When two user processes both need a new frame at the same time,
 >> how are races avoided?
-
+While allocating a new frame, first we do palloc_get_page(). Palloc itself
+uses lock for allocating frames. Now, it returns null, we evict already mapped
+frame. Before doing this, we acquire lock. So two processes won't interfere
+with other's frame allocation.
 
 ---- RATIONALE ----
 
 >> A5: Why did you choose the data structure(s) that you did for
 >> representing virtual-to-physical mappings?
+We used list for implementing frameTable, because list's implementation
+is easier.
 
 		       PAGING TO AND FROM DISK
 		       =======================
@@ -135,10 +140,15 @@ and finally listElement of the type list_elem which is used to maintain the entr
 
 We have implemented the clock algorithm for finding out the frame to evict.
 
-When a frame is needed but no frame is free, then a pointer traverses the whole list,
-and keeps moving forward till it finds a frame with 0 accessed bit. During the traversal,
-it marks the accessed bits of all the frames as 0. The chosen frame is removed from
-it position and it pushed at the end of the list.
+When a frame is needed but no frame is free, then we traverse the frame 
+Table list starting from a global static pointer (position of last evicted
+frame), and traverse the whole list to find a page which has been marked
+as not accessed. If on our way, we find any pages which are accessed, we mark
+them as not accessed. when we find a frame table entry, we change its 
+contents. Whenever we have to insert a new frame table entry into the table,
+we insert it just before this pointer. Whenever we have to evict a frame
+entry, we start from this pointer. This pointer basically marks as a starting
+and ending of the list.
 
 
 >> B3: When a process P obtains a frame that was previously used by a
@@ -174,13 +184,21 @@ set in the syscall_handler function.
 >> particular, explain how it prevents deadlock.  (Refer to the
 >> textbook for an explanation of the necessary conditions for
 >> deadlock.)
-
+We have made sure that we acquire locks such that there is no deadlock.
+We have tries to use locks such that two processes don't acquire different
+locks and keep asking for each other's lock. We tried to keep the critical
+sections as small as possible.
 
 
 >> B6: A page fault in process P can cause another process Q's frame
 >> to be evicted.  How do you ensure that Q cannot access or modify
 >> the page during the eviction process?  How do you avoid a race
 >> between P evicting Q's frame and Q faulting the page back in?
+When we are evicting a frame, we remove its entry from the supplememtary
+page table. While doing so we acquire a lock on the supplementary page table,
+so that no other thread can access it. So, other thread whose supplememtary page
+table is being modified, won't be able to access its supplementary page table
+until someone else is done changing it.
 
 >> B7: Suppose a page fault in process P causes a page to be read from
 >> the file system or swap.  How do you ensure that a second process Q

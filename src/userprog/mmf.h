@@ -1,7 +1,7 @@
 #include "lib/stdbool.h"
 #include "threads/thread.h"
 
-
+/*struct for storing details about a single mapping*/
 struct mmfStruct {
 	mapid_t mapid;
 	struct file *file;

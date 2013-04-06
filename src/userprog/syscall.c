@@ -15,7 +15,6 @@
 #include "vm/debug.h"
 #include "userprog/mmf.h"
 #include "vm/page.h"
-#include "vm/frame.h"
 
 extern struct lock filesys_lock;
 
@@ -203,7 +202,6 @@ void process_terminate(void)
   struct thread *t = thread_current ();
   printf ("%s: exit(%d)\n", t->name, t->exit_status);  
   thread_exit();
-  removeFrameEntriesFor(t->tid);
 }
 
 
@@ -400,9 +398,17 @@ unsigned sys_tell(int fd)
   return -1;
 }
 
-mapid_t mmap (int fd, void *addr)
-{
-	DPRINTF_SYS("entered syscall mmap\n");
+/* Used to map an opened file to memory.
+ * it accesses the file already opened and mapped to given fd.
+ * check all the pages starting from addr till the file_length, in the
+ * supptable. if any of them exists, then returns -1 as it is not possible
+ * to add the file at that addess. Otherwise, it calls mmfiles_insert to
+ * add the mapping.
+ * */
+mapid_t mmap (int fd, void *addr) {
+	
+	DPRINTF_SYS("mmap: begin\n");
+	
 	struct file *fileStruct;
 	struct file *reopenedFile;
 	struct thread *t = thread_current();
@@ -428,22 +434,30 @@ mapid_t mmap (int fd, void *addr)
 	for(i = 0; i < length; i+=PGSIZE)
 		if(get_supptable_page(&t->suppl_page_table, addr + i,t) || pagedir_get_page(t->pagedir, addr + i))
 			return -1;
+	
+	DPRINTF_SYS("mmap: added to supptable\n");
+	
 	lock_acquire(&filesys_lock);
 	reopenedFile = file_reopen(fileStruct);
 	lock_release(&filesys_lock);
 
 	if(reopenedFile == NULL)
 		return -1;
-	// call insert mmfiles function (to be created in process.c)
+	
 	mapid_t x = mmfiles_insert(addr, reopenedFile, length);
-	DPRINTF_SYS("mmap:COMPLETE\n");
+	
+	DPRINTF_SYS("mmap: inserted to hash table\n");
+	
+	DPRINTF_SYS("mmap: end\n");
+	
 	return x;
 }
 
-void munmap (mapid_t mapping)
-{
+/* Used to unmap a mapping. Calls the mmfiles_remove function*/
+void munmap (mapid_t mapping) {
+	DPRINTF_SYS("munmap: begin\n");
 	mmfiles_remove (mapping);
-	DPRINTF_SYS("munmap:COMPLETE\n");
+	DPRINTF_SYS("munmap: end\n");
 }
 
 /* This function has been used to check the address of the buffer

@@ -8,6 +8,7 @@ void *evictFrameFor(void *page);
 void setFrameAttributes(uint32_t *pte, void *kpage);
 void removeFrameEntriesFor(tid_t t);
 
+/*structure fro storing frame mappings in the frame Table*/
 struct frameStruct {
 	void *frame;
 	tid_t tid;
@@ -16,4 +17,6 @@ struct frameStruct {
 	struct list_elem listElement;
 };
 
+/*Global frame Table used to store all the mappings of the frames with 
+ * the pages of any thread*/
 struct list frameTable;
