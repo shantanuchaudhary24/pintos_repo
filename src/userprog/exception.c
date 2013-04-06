@@ -187,7 +187,9 @@ page_fault (struct intr_frame *f)
   			  if(page_entry!=NULL && !page_entry->is_page_loaded)
   			  {
   				  if(load_supptable_page(page_entry)==false)
-  					  DPRINTF_EXCEP("page_fault:UCSEG:LOAD PAGE FAILED\n");
+  					  {
+  					  	  DPRINTF_EXCEP("page_fault:UCSEG:LOAD PAGE FAILED\n");
+  					  }
   			  }
   			  else if(page_entry==NULL && ((int *)fault_addr>=(int *)(f->esp)-8) && (pg_round_down(f->esp)>=(PHYS_BASE-STACK_SIZE)))
   			  {

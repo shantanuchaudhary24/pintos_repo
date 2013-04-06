@@ -21,14 +21,12 @@
 extern struct lock filesys_lock;
 
 static bool load_page_swap(struct supptable_page *page_entry);
-static bool load_page_file(struct supptable_page *page_entry);
-static bool load_page_mmf (struct supptable_page *page_entry);
 static void supptable_free_page(struct hash_elem *element, void *aux UNUSED);
 static unsigned page_hash (const struct hash_elem *p_, void *aux UNUSED);
 static bool page_less (const struct hash_elem *a_, const struct hash_elem *b_,void *aux UNUSED);
-
 static bool load_file(struct supptable_page *page_entry);
 static bool set_page_suppl(struct supptable_page *page_entry, void *kpage,struct thread *t);
+
 /* This function initialises the supplementary table
  * by call hash_init which is complimented by the use of
  * page_has and page_less functions.It returns true on success
@@ -188,12 +186,8 @@ bool load_supptable_page(struct supptable_page *page_entry)
 	switch(page_entry->page_type)
 	{
 		case FILE:
-			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_FILE\n");
-			result=load_file(page_entry);
-			break;
 		case MMF | SWAP:
 		case MMF:
-			DPRINTF_PAGE("load_supptable_page:LOAD_PAGE_MMF\n");
 			result=load_file(page_entry);
 			break;
 		case FILE | SWAP:
@@ -242,15 +236,17 @@ static bool load_file(struct supptable_page *page_entry)
 	}
 
 	memset(kpage + page_entry->read_bytes, 0,page_entry->zero_bytes);
-
 	return set_page_suppl(page_entry,kpage,t);
 }
 
-
+/* Helping function for load_file. Just sets the appropriate bits in pagedir
+ * and in the supplementary page table.
+ * */
 static bool set_page_suppl(struct supptable_page *page_entry, void *kpage,struct thread *t)
 {
 	if((page_entry->page_type & (MMF|SWAP)) || (page_entry->page_type & MMF))
 	{
+		DPRINTF_PAGE("set_page_suppl:CASE MMF|SWAP\n");
 		if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage, true))
 		{
 			freeFrame (kpage);
@@ -266,6 +262,7 @@ static bool set_page_suppl(struct supptable_page *page_entry, void *kpage,struct
 
 	if(page_entry->page_type & FILE)
 	{
+		DPRINTF_PAGE("set_page_suppl:CASE FILE\n");
 		if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->writable))
 		{
 			DPRINTF_PAGE("load_page_file:FREE FRAME");
@@ -313,106 +310,6 @@ static bool load_page_swap(struct supptable_page *page_entry)
 	}
 	return true;
 }
-
-/* Extension of load_supptable_page function to load a page
- * from disk space into the memory page table.Allocates a frame
- * based upon the page type.Frees it if the mapping fails.
- * It then loads the EXECUTABLE file into the frame specified by kpage.
- * It then zeroes out memory at kpage + the supplementary
- * page read_bytes. Then it ,adds the page to the process's address
- * space. If the load is successful this function returns true
- * else returns false.
- * */
-static bool load_page_file(struct supptable_page *page_entry)
-{
-	DPRINT_PAGE("load_page_file:PAGE UVADDR:%x\n",(uint32_t)page_entry->uvaddr);
-	void *kpage;
-	int ret=0;
-	struct thread *t=thread_current();
-
-	lock_acquire(&filesys_lock);
-	file_seek (page_entry->file, page_entry->offset);
-	kpage= allocateFrame(PAL_USER,page_entry->uvaddr);
-	if (kpage == NULL)
-	{
-		DPRINTF_PAGE("load_page_file:FRAME ALLOC. FAILED\n");
-		lock_release(&filesys_lock);
-		return false;
-	}
-
-	ret=file_read(page_entry->file,kpage,page_entry->read_bytes);
-	lock_release(&filesys_lock);
-
-	if (ret!= (int)page_entry->read_bytes)
-	{
-		DPRINTF_PAGE("load_page_file:FILE_READ FAIL:");
-		freeFrame(kpage);
-	    return false;
-	}
-
-	memset(kpage + page_entry->read_bytes, 0,page_entry->zero_bytes);
-
-	if (!pagedir_set_page (t->pagedir, page_entry->uvaddr, kpage,page_entry->writable))
-	{
-		DPRINTF_PAGE("load_page_file:FREE FRAME");
-		freeFrame (kpage);
-		return false;
-	}
-	page_entry->is_page_loaded = true;
-	DPRINTF_PAGE("load_page_file:TRUE\n");
-	return true;
-}
-
-/* Extension of load_supptable_page function to load a memory
- * mapped file into the memory frame table.Allocates a frame
- * based upon the page type.Frees the frame if the page read.
- * It then loads the file from
- * disk into the memory page table.It then zeroes out the suppl
- * page read_bytes. Then it ,adds the page to the process's address
- * space. If the load is successful this function returns true
- * else returns false.
- * */
-static bool load_page_mmf (struct supptable_page *page_entry)
-{
-	void *kpage ;
-	int ret=0 ;
-	struct thread *cur = thread_current ();
-
-	lock_acquire(&filesys_lock);
-	file_seek (page_entry->file, page_entry->offset);
-	kpage = allocateFrame (PAL_USER, page_entry->uvaddr);
-	if (kpage == NULL)
-	{
-		DPRINTF_PAGE("Load Page MMF: false : couldn't allocate Frame\n");
-		lock_release(&filesys_lock);
-		return false;
-	}
-
-	ret=file_read (page_entry->file, kpage, page_entry->read_bytes);
-	lock_release(&filesys_lock);
-	if ( ret!= (int) page_entry->read_bytes)
-	{
-		freeFrame (kpage);
-		DPRINTF_PAGE("Load Page MMF: false : couldn't read file\n");
-		return false; 
-    }
-	
-	memset (kpage + page_entry->read_bytes, 0, PGSIZE - page_entry->read_bytes);
-
-	if (!pagedir_set_page (cur->pagedir, page_entry->uvaddr, kpage, true))
-	{
-		freeFrame (kpage);
-		DPRINTF_PAGE("Load Page MMF: false : couldn't set pagedir entry\n");
-		return false; 
-    }
-
-	page_entry->is_page_loaded = true;
-	if (page_entry->page_type & SWAP)
-		page_entry->page_type = MMF;
-	DPRINTF_PAGE("Load Page MMF: true\n");
-	return true;
-}
-
 
 /* Auxiliary Functions for hashing */
 /* Returns a hash value for page p. */
