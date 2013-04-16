@@ -6,7 +6,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "lib/stdbool.h"
 #include "userprog/gdt.h"
 #include "userprog/pagedir.h"
 #include "userprog/tss.h"
@@ -21,15 +20,11 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/input.h"
-#include "vm/page.h"
-#include "vm/debug.h"
-#include "userprog/mmf.h"
-#include "vm/frame.h"
-
-extern struct lock filesys_lock;
+#include "debug_helper.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
+void print_pagedir(uint32_t* pagedir);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -81,19 +76,10 @@ start_process (void *file_name_)
   char *file_name = 0;
   struct intr_frame if_;
   bool success;
-  struct thread *t=thread_current();
+  
   char *token, *save_ptr;
   // file_name will now point to the prog name without args
   file_name = token = strtok_r(file_name_, " ", &save_ptr);
-
-  /* initialising supplementary table lock*/
-  lock_init(&t->suppl_table_lock);
-
-  /* initialising the supplementary table*/
-  init_supptable(&t->suppl_page_table);
-
-  /*initialising mmf bitmap*/
-  mmfiles_init(&t->mmfiles);
 
   /* Initialize interrupt frame and load executable. */
   memset (&if_, 0, sizeof if_);
@@ -135,7 +121,7 @@ start_process (void *file_name_)
   if(!success)
   {
     if(tmp_scratch)
-    palloc_free_page(tmp_scratch);
+      palloc_free_page(tmp_scratch);
     palloc_free_page (file_name_);
     thread_exit ();
   }
@@ -239,7 +225,6 @@ process_wait (tid_t child_tid)
       intr_enable();
     }
   }
-  return 0;
 }
 
 /* Free the current process's resources. */
@@ -248,15 +233,11 @@ process_exit (void)
 {
   struct thread *cur = thread_current ();
   uint32_t *pd;
-  free_mmfiles(&cur->mmfiles);						// freeing the mmf table
-  free_supptable(&cur->suppl_page_table); 			// freeing the supplementary table
-
+  
   // clean up zombie children of this process
   zombie_cleanup_on_parent_termination(cur->tid);
   // clean up zombie children processes that are dead 
   zombie_with_dead_parent_cleanup();
-
-
 
   /* Destroy the current process's page directory and switch back
      to the kernel-only page directory. */
@@ -374,8 +355,10 @@ struct Elf32_Phdr
 
 static bool setup_stack (void **esp);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
-static bool lazy_load_segment(struct thread *t,struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable);
+static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
+                          uint32_t read_bytes, uint32_t zero_bytes,
+                          bool writable);
+
 /* Loads an ELF executable from FILE_NAME into the current thread.
    Stores the executable's entry point into *EIP
    and its initial stack pointer into *ESP.
@@ -399,15 +382,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* Open executable file. */
   lock_acquire(&filesys_lock);
   file = filesys_open (file_name);
-  lock_release(&filesys_lock);
   if (file == NULL) 
     {
-      DPRINT_PROC("load: %s: open failed\n", file_name);
+      printf ("load: %s: open failed\n", file_name);
       goto done; 
     }
 
   /* Read and verify executable header. */
-  lock_acquire(&filesys_lock);
   if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
       || memcmp (ehdr.e_ident, "\177ELF\1\1\1", 7)
       || ehdr.e_type != 2
@@ -416,11 +397,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
       || ehdr.e_phentsize != sizeof (struct Elf32_Phdr)
       || ehdr.e_phnum > 1024) 
     {
-      DPRINT_PROC("load: %s: error loading executable\n", file_name);
-      lock_release(&filesys_lock);
+      printf ("load: %s: error loading executable\n", file_name);
       goto done; 
     }
-  lock_release(&filesys_lock);
+
   /* Read program headers. */
   file_ofs = ehdr.e_phoff;
   for (i = 0; i < ehdr.e_phnum; i++) 
@@ -429,14 +409,10 @@ load (const char *file_name, void (**eip) (void), void **esp)
 
       if (file_ofs < 0 || file_ofs > file_length (file))
         goto done;
-      lock_acquire(&filesys_lock);
       file_seek (file, file_ofs);
+
       if (file_read (file, &phdr, sizeof phdr) != sizeof phdr)
-      {
-    	  lock_release(&filesys_lock);
-    	  goto done;
-      }
-      lock_release(&filesys_lock);
+        goto done;
       file_ofs += sizeof phdr;
       switch (phdr.p_type) 
         {
@@ -474,7 +450,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
                   read_bytes = 0;
                   zero_bytes = ROUND_UP (page_offset + phdr.p_memsz, PGSIZE);
                 }
-              if (!lazy_load_segment (t,file, file_page, (void *) mem_page,
+              if (!load_segment (file, file_page, (void *) mem_page,
                                  read_bytes, zero_bytes, writable))
                 goto done;
             }
@@ -492,13 +468,13 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
   success = true;
 
-  done:
+  print_pagedir(t->pagedir);
+ done:
   /* We arrive here whether the load is successful or not. */
   if(!success)
   {
-    DPRINTF_PROC("load function failed\n");
+    DPRINTF("load function failed\n");
   }
-  lock_acquire(&filesys_lock);
   file_close (file);
   lock_release(&filesys_lock);
   return success;
@@ -553,63 +529,81 @@ validate_segment (const struct Elf32_Phdr *phdr, struct file *file)
   return true;
 }
 
-/* For lazy loading of executables.Seeks the file to required offset
- * and adds the file page by page with appropriate read_bytes and zero
- * bytes to the supplementary page table of the process.
- * */
-static bool lazy_load_segment(struct thread *t,struct file *file, off_t ofs, uint8_t *upage,
-              uint32_t read_bytes, uint32_t zero_bytes, bool writable)
+/* Loads a segment starting at offset OFS in FILE at address
+   UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
+   memory are initialized, as follows:
+
+        - READ_BYTES bytes at UPAGE must be read from FILE
+          starting at offset OFS.
+
+        - ZERO_BYTES bytes at UPAGE + READ_BYTES must be zeroed.
+
+   The pages initialized by this function must be writable by the
+   user process if WRITABLE is true, read-only otherwise.
+
+   Return true if successful, false if a memory allocation error
+   or disk read error occurs. */
+static bool
+load_segment (struct file *file, off_t ofs, uint8_t *upage,
+              uint32_t read_bytes, uint32_t zero_bytes, bool writable) 
 {
-	ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
-	ASSERT (pg_ofs (upage) == 0);
-	ASSERT (ofs % PGSIZE == 0);
+  ASSERT ((read_bytes + zero_bytes) % PGSIZE == 0);
+  ASSERT (pg_ofs (upage) == 0);
+  ASSERT (ofs % PGSIZE == 0);
 
-	lock_acquire(&filesys_lock);
-	file_seek(file,ofs);	//offset to read file from
-	lock_release(&filesys_lock);
-	while (read_bytes > 0 || zero_bytes > 0)
-	{
-		size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
-        size_t page_zero_bytes = PGSIZE - page_read_bytes;
-        if(!supptable_add_file(t,FILE,file,ofs,upage,page_read_bytes,page_zero_bytes,writable))
+  file_seek (file, ofs);
+  while (read_bytes > 0 || zero_bytes > 0) 
+    {
+      /* Calculate how to fill this page.
+         We will read PAGE_READ_BYTES bytes from FILE
+         and zero the final PAGE_ZERO_BYTES bytes. */
+      size_t page_read_bytes = read_bytes < PGSIZE ? read_bytes : PGSIZE;
+      size_t page_zero_bytes = PGSIZE - page_read_bytes;
+
+      /* Get a page of memory. */
+      uint8_t *kpage = palloc_get_page (PAL_USER);
+      if (kpage == NULL)
+        return false;
+
+      /* Load this page. */
+      if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes)
         {
-        	DPRINTF_PROC("lazy_load_segment:SUPP_TABLE ADD FAIL\n");
-        	return false;
+          palloc_free_page (kpage);
+          return false; 
         }
-        /* Loop ahead*/
-        read_bytes-=page_read_bytes;
-        zero_bytes-=page_zero_bytes;
-        ofs+=page_read_bytes;
-        upage+=PGSIZE;
-	}
-	DPRINTF_PROC("lazy_load_segment:SUPP_TABLE ADD SUCCESS\n");
-	return true;
+      memset (kpage + page_read_bytes, 0, page_zero_bytes);
+
+      /* Add the page to the process's address space. */
+      if (!install_page (upage, kpage, writable)) 
+        {
+          palloc_free_page (kpage);
+          return false; 
+        }
+
+      /* Advance. */
+      read_bytes -= page_read_bytes;
+      zero_bytes -= page_zero_bytes;
+      upage += PGSIZE;
+    }
+  return true;
 }
-
-
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. */
 static bool
-setup_stack (void **esp)
+setup_stack (void **esp) 
 {
   uint8_t *kpage;
   bool success = false;
-  DPRINTF_PROC("setup_stack_vm:BEGIN\n");
-  kpage = allocateFrame(PAL_USER | PAL_ZERO,*esp);
+
+  kpage = palloc_get_page (PAL_USER | PAL_ZERO);
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-      {
-    	  DPRINTF_PROC("setup_stack_vm:SUCCESS\n");
-    	  *esp = PHYS_BASE;
-      }
+        *esp = PHYS_BASE;
       else
-      {
-    	  DPRINTF_PROC("setup_stack_vm:FAIL\n");
-    	  freeFrame(kpage);
-      }
+        palloc_free_page (kpage);
     }
   return success;
 }
@@ -632,4 +626,19 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+// debug helper for visualizing the page_dir
+void print_pagedir(uint32_t* pagedir)
+{
+  int i;
+  uint32_t pdent;
+  for(i = 0; i < 1024; ++i)
+  {
+    pdent = pagedir[i];
+    if(pdent)
+    {
+      DPRINTF("-----entry no = %d---value %x\n", i, pdent);
+    }
+  }
 }

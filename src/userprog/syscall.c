@@ -12,9 +12,7 @@
 #include "process.h"
 #include "pagedir.h"
 #include "devices/input.h"
-#include "vm/debug.h"
-#include "userprog/mmf.h"
-#include "vm/page.h"
+#include "userprog/debug.h"
 
 extern struct lock filesys_lock;
 
@@ -155,22 +153,9 @@ static void syscall_handler (struct intr_frame *f)
         	sys_close(fd);
         }
         return;
+        /*
       case SYS_MMAP:
-      {
-    	  DPRINTF_SYS("SYS_MMAP");
-    	  int fd=get_valid_val(arg+1);
-    	  void *addr=(void *)get_valid_val(arg+2);
-    	  f->eax=(unsigned)mmap(fd,addr);
-      }
-      return;
       case SYS_MUNMAP:
-      {
-    	  DPRINTF_SYS("SYS_MUNMAP");
-    	  mapid_t mapping=(mapid_t)get_valid_val(arg+1);
-    	  munmap(mapping);
-      }
-      return;
-    	  /*
       case SYS_CHDIR:
       case SYS_MKDIR:
       case SYS_READDIR:
@@ -398,67 +383,6 @@ unsigned sys_tell(int fd)
   return -1;
 }
 
-/* Used to map an opened file to memory.
- * it accesses the file already opened and mapped to given fd.
- * check all the pages starting from addr till the file_length, in the
- * supptable. if any of them exists, then returns -1 as it is not possible
- * to add the file at that addess. Otherwise, it calls mmfiles_insert to
- * add the mapping.
- * */
-mapid_t mmap (int fd, void *addr) {
-	
-	DPRINTF_SYS("mmap: begin\n");
-	
-	struct file *fileStruct;
-	struct file *reopenedFile;
-	struct thread *t = thread_current();
-	int length = 0;
-	int i = 0;
-
-	if(fd < 2)
-		return -1;
-
-	if(addr == NULL || addr == 0x0 || pg_ofs(addr) != 0)
-		return -1;
-	if(fd >= 0 && fd < FDTABLESIZE)
-		fileStruct = thread_current()->fd_table[fd];
-	else return -1;
-
-	lock_acquire(&filesys_lock);
-	length = file_length(fileStruct);
-	lock_release(&filesys_lock);
-
-	if(length <= 0)
-		return -1;
-
-	for(i = 0; i < length; i+=PGSIZE)
-		if(get_supptable_page(&t->suppl_page_table, addr + i,t) || pagedir_get_page(t->pagedir, addr + i))
-			return -1;
-	
-	DPRINTF_SYS("mmap: added to supptable\n");
-	
-	lock_acquire(&filesys_lock);
-	reopenedFile = file_reopen(fileStruct);
-	lock_release(&filesys_lock);
-
-	if(reopenedFile == NULL)
-		return -1;
-	
-	mapid_t x = mmfiles_insert(addr, reopenedFile, length);
-	
-	DPRINTF_SYS("mmap: inserted to hash table\n");
-	
-	DPRINTF_SYS("mmap: end\n");
-	
-	return x;
-}
-
-/* Used to unmap a mapping. Calls the mmfiles_remove function*/
-void munmap (mapid_t mapping) {
-	DPRINTF_SYS("munmap: begin\n");
-	mmfiles_remove (mapping);
-	DPRINTF_SYS("munmap: end\n");
-}
 
 /* This function has been used to check the address of the buffer
  * indices in write system call.It scans the address index of
@@ -591,7 +515,7 @@ get_valid_val(int *uaddr)
   }
   return get_user(uaddr);
 }
- 
+
 /* Reads a byte at user virtual address UADDR.
    UADDR must be below PHYS_BASE.
    Returns the byte value if successful, -1 if a segfault
@@ -600,7 +524,7 @@ static int
 get_user (const int *uaddr)
 {
   int result;
-  asm ("movl $1f, %0; movl %1, %0; 1:"		
+  asm ("movl $1f, %0; movl %1, %0; 1:"
        : "=&a" (result) : "m" (*uaddr));
   return result;
 }

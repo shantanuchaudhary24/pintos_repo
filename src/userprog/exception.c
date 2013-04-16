@@ -7,9 +7,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "userprog/syscall.h"
-#include "vm/page.h"
-#include "vm/debug.h"
-#include "userprog/pagedir.h"
 
 /* Number of page faults processed. */
 static long long page_fault_cnt;
@@ -92,26 +89,26 @@ kill (struct intr_frame *f)
     case SEL_UCSEG:
       /* User's code segment, so it's a user exception, as we
          expected.  Kill the user process.  */
-      thread_current()->exit_status=-1;
-      process_terminate();
-      break;
+    	thread_current()->exit_status=-1;
+    	process_terminate();
+    	break;
 
     case SEL_KCSEG:
       /* Kernel's code segment, which indicates a kernel bug.
          Kernel code shouldn't throw exceptions.  (Page faults
          may cause kernel exceptions--but they shouldn't arrive
          here.)  Panic the kernel to make the point.  */
-        /* If we had come from put_user or get_user function*/
     	if((((uint32_t)f->eax-(uint32_t)f->eip)==2) || (((uint32_t)f->eax-(uint32_t)f->eip)==3))
-        {
-        	f->eip=(void *)f->eax;
-        	f->eax=(-1);
-        }else /* PANIC THE KERNEL:There is some bug*/
-        {
-        	PANIC("UNEXPECTED BUG IN KERNEL");
-        }
-        break;
-        
+    	{
+    	  	f->eip=(void *)f->eax;
+    	   	f->eax=(-1);
+    	}
+    	else /* PANIC THE KERNEL:There is some bug*/
+    	{
+    	  	PANIC("UNEXPECTED BUG IN KERNEL");
+    	    }
+    	break;
+
     default:
       /* Some other code segment?  Shouldn't happen.  Panic the
          kernel. */
@@ -136,106 +133,32 @@ kill (struct intr_frame *f)
 static void
 page_fault (struct intr_frame *f) 
 {
-  bool not_present;  /* True: not-present page, false: writing r/o page. */
-  bool write UNUSED; /* True: access was write, false: access was read. */
-  bool user UNUSED;  /* True: access by user, false: access by kernel. */
+  bool not_present UNUSED;  /* True: not-present page, false: writing r/o page. */
+  bool write UNUSED;        /* True: access was write, false: access was read. */
+  bool user UNUSED;         /* True: access by user, false: access by kernel. */
   void *fault_addr;  /* Fault address. */
-  struct thread *t=thread_current();
-  struct supptable_page *page_entry;
 
+  /* Obtain faulting address, the virtual address that was
+     accessed to cause the fault.  It may point to code or to
+     data.  It is not necessarily the address of the instruction
+     that caused the fault (that's f->eip).
+     See [IA32-v2a] "MOV--Move to/from Control Registers" and
+     [IA32-v3a] 5.15 "Interrupt 14--Page Fault Exception
+     (#PF)". */
   asm ("movl %%cr2, %0" : "=r" (fault_addr));
 
+  /* Turn interrupts back on (they were only off so that we could
+     be assured of reading CR2 before it changed). */
   intr_enable ();
 
+  /* Count page faults. */
   page_fault_cnt++;
 
+  /* Determine cause. */
   not_present = (f->error_code & PF_P) == 0;
   write = (f->error_code & PF_W) != 0;
   user = (f->error_code & PF_U) != 0;
 
-  /* Printing the causes for debugging*/
-  DPRINT_EXCEP("page_fault:not_present:%d\n",not_present);
-  DPRINT_EXCEP("page_fault:write:%d\n",write);
-  DPRINT_EXCEP("page_fault:user:%d\n",user);
-
-    	  	  	  	  	  	  /*  PAGE FAULT HANDLING*/
-
-  switch(f->cs)
-  {
-  	  /* For user stack segment, we check for write violation,NULL address, address
-  	   * less than PHYSBASE.If there is any violation, we terminate the process.Next
-  	   * we consult the supplementary page table to fetch the appropriate page
-  	   * corresponding to the fault address.We load the entry corresponding to the
-  	   * page(depending upon swap,file,mmf as needed).Otherwise we check for read/write
-  	   * access and check if stack needs to be grown.If all these case fail, terminate the
-  	   * process.
-  	   * */
-	  case SEL_UCSEG:
-  		  DPRINT_EXCEP("page_fault:UCSEG:fault_addr:%x\n",(uint32_t)fault_addr);
-
-  		  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
-  		  {
-  			  DPRINTF_EXCEP("page_fault:UCSEG:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
-  			  t->exit_status=-1;
-  			  process_terminate();
-  		  }
-  		  else
-  		  {
-  			  /* Demand paging is done here*/
-  			  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr),t);
-  			  DPRINT_EXCEP("page_fault:UCSEG:Getting correct Entry Addr:%x\n",(uint32_t)page_entry->uvaddr);
-  			  if(page_entry!=NULL && !page_entry->is_page_loaded)
-  			  {
-  				  if(load_supptable_page(page_entry,t)==false)
-  					  {
-  					  	  DPRINTF_EXCEP("page_fault:UCSEG:LOAD PAGE FAILED\n");
-  					  }
-  			  }
-  			  else if(page_entry==NULL && ((int *)fault_addr>=(int *)(f->esp)-8) && (pg_round_down(f->esp)>=(PHYS_BASE-STACK_SIZE)))
-  			  {
-  				  DPRINTF_EXCEP("page_fault:UCSEG:GROW STACK\n");
-  				  grow_stack(fault_addr,t);
-  			  }
-  			  else kill(f);
-  		  }
-  		  break;
-
-  	  /* For kernel stack segment, we check for write violation,NULL address, address
-  	   * less than PHYSBASE and saved stack pointer is in valid user virtual address space.
-  	   * If there is any violation, we terminate the process.Next
-  	   * we consult the supplementary page table to fetch the appropriate page
-  	   * corresponding to the fault address.We load the entry corresponding to the
-  	   * page(depending upon swap,file,mmf as needed).Otherwise we check if stack needs to
-  	   * be grown(using the saved stack pointer).In the final case we move to kill(f) to
-  	   * determine if the bug was from get_user/put_user function and swap eip/eax or we
-  	   * panic the kernel if there is a bug.
-  	   * */
-	  case SEL_KCSEG:
-  		  	  	  	  	  	  	  /* For debugging */
-		  DPRINT_EXCEP("page_fault:KERNEL fault_addr:%x\n",(uint32_t)fault_addr);
-  		  DPRINT_EXCEP("page_fault:KERNEL t->stack addr:%x\n",(uint32_t)t->stack);
-  		  DPRINT_EXCEP("is_user_vaddr(fault_addr):%d\n",is_user_vaddr(fault_addr));
-  		  DPRINT_EXCEP("EIP is:%x\n",(uint32_t)f->eip);
-  		  if(!not_present || fault_addr==NULL || !is_user_vaddr(fault_addr))
-  		  {
-  			  DPRINTF_EXCEP("page_fault:KCSEG:WRITE VIOLATION/NULL/VALID_USER_VADDR\n");
-  			  t->exit_status=-1;
-  			  process_terminate();
-  		  }
-  		  else
-  		  {
-  			  page_entry=get_supptable_page(&t->suppl_page_table,pg_round_down(fault_addr),t);
-  			  if(page_entry!=NULL && !page_entry->is_page_loaded)
-  			  {
-  				  DPRINTF_EXCEP("page_fault:KCSEG:LOAD PAGE\n");
-  				  load_supptable_page(page_entry,t);
-  			  }
-  			  else if(page_entry == NULL && ((int *)fault_addr>=((int *)(t->stack))-8) && (pg_round_down(t->stack)>=(PHYS_BASE-STACK_SIZE)))
-  			  {
-  				  DPRINTF_EXCEP("page_fault:KCSEG:GROW STACK\n");
-  				  grow_stack(fault_addr,t);
-  			  }
-  			  else kill(f);
-  		  }break;
-  	}
+  kill (f);
 }
+

@@ -30,9 +30,6 @@
 #include "userprog/gdt.h"
 #include "userprog/syscall.h"
 #include "userprog/tss.h"
-#include "userprog/mmf.h"
-#include "vm/swap.h"
-#include "vm/frame.h"
 #else
 #include "tests/threads/tests.h"
 #endif
@@ -126,7 +123,6 @@ main (void)
 #ifdef USERPROG
   exception_init ();
   syscall_init ();
-  frameInit();
 #endif
 
   /* Start thread scheduler and enable interrupts. */
@@ -140,7 +136,6 @@ main (void)
   usb_storage_init ();
   ide_init ();
   locate_block_devices ();
-  init_swap_space();
   filesys_init (format_filesys);
 #endif
 

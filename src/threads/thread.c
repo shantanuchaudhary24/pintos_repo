@@ -5,7 +5,6 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
-#include "lib/debug.h"
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -303,7 +302,7 @@ void
 thread_exit (void) 
 {
   ASSERT (!intr_context ());
-  
+
 #ifdef USERPROG
   process_exit ();
 #endif
@@ -313,14 +312,15 @@ thread_exit (void)
      when it call schedule_tail(). */
   intr_disable ();
   struct thread* t_cur = thread_current();
+  
   // add to zombie list
   zombie_add(t_cur->tid, t_cur->exit_status, t_cur->parent_tid);
-
+  
   // check if parent is waiting for exit_status
   // if yes then unblock it
   if(t_cur->parent_waiting)
     thread_unblock(t_cur->parent_waiting);
-
+  
   list_remove (&t_cur->allelem);
   t_cur->status = THREAD_DYING;
   schedule ();
@@ -688,8 +688,8 @@ void zombie_cleanup_on_parent_termination(tid_t parent_tid)
     struct zombie_thread *f = list_entry(e, struct zombie_thread, all_zombie_elem);
     if(f->tid == parent_tid)
     {
-    	e = list_remove(&(f->all_zombie_elem));
-    	palloc_free_page(f);
+      e = list_remove(&(f->all_zombie_elem));
+      palloc_free_page(f);
     }
     else
       e = list_next(e);

@@ -6,8 +6,6 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
-#include "lib/kernel/hash.h"
-#include "lib/debug.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -21,8 +19,6 @@ enum thread_status
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
-typedef int mapid_t;
-
 #define TID_ERROR ((tid_t) -1)          /* Error value for tid_t. */
 
 /* Thread priorities. */
@@ -120,9 +116,6 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     struct file* fd_table[FDTABLESIZE]; //  fixed size file descriptor table
     struct file* fi;                    //  executables file pointer
-
-    struct hash suppl_page_table;
-    struct lock suppl_table_lock;
     uint32_t exit_status;               // exit status of the process
     tid_t parent_tid;                   // tid of its parent 
     struct thread* parent_waiting;      // parent has called wait() and is blocked 
@@ -133,11 +126,6 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
-
-    /*For Memory Mapped Files*/
-    struct hash mmfiles;
-    mapid_t mapid_allocator;
-
   };
 
 /* If false (default), use round-robin scheduler.

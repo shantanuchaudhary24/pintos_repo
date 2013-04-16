@@ -61,7 +61,7 @@ sub parse_command_line {
 		    "debug=s" => sub { set_debug ($_[1]) },
 		    "no-debug" => sub { set_debug ("none") },
 		    "monitor" => sub { set_debug ("monitor") },
-		    "d" => sub { set_debug ("gdb") },
+		    "gdb" => sub { set_debug ("gdb") },
 
 		    "m|memory=i" => \$mem,
 		    "j|jitter=i" => sub { set_jitter ($_[1]) },
@@ -103,12 +103,12 @@ sub parse_command_line {
 	  or exit 1;
     }
 
-    $sim = "bochs" if !defined $sim;
+    $sim = "qemu" if !defined $sim;
     $debug = "none" if !defined $debug;
     $vga = exists ($ENV{DISPLAY}) ? "window" : "none" if !defined $vga;
 
     if ($sim eq 'hardware') {
-	$make_disk = "pintos.dsk" if !defined $make_disk;
+	$make_disk = "/home/dahiya/os_course/lab2/pintos-repo/src/threads/build/pintos.dsk" if !defined $make_disk;
 	$tmp_disk = 0;
 	$align = 'full' if !defined $align;
     }
@@ -124,7 +124,7 @@ sub parse_command_line {
 
     $align = "bochs",
       print STDERR "warning: setting --align=bochs for Bochs support\n"
-	if $sim eq 'bochs' && defined ($align) && $align eq 'none';
+if $sim eq 'bochs' && defined ($align) && $align eq 'none';
 }
 
 # usage($exitcode).
@@ -958,15 +958,6 @@ sub exec_setitimer {
     exit (1);
 }
 
-sub SIGVTALRM {
-    use Config;
-    my $i = 0;
-    foreach my $name (split(' ', $Config{sig_name})) {
-	return $i if $name eq 'VTALRM';
-	$i++;
-    }
-    return 0;
-}
 
 # find_in_path ($program)
 #

@@ -10,6 +10,18 @@
 int
 main (void)
 {
-  halt ();
+//  int child = exec("echo");
+//  wait(child);
+  int check = create("manjeet", 12);
+  if(check)
+    printf("create sucess \n");
+  check = open("manjeet");
+  if(check)
+  printf("open sucess \n");
+  close(check);
+  return 11;
+//  exit(229);
+//  wait(1);
+  //halt();
   /* not reached */
 }
