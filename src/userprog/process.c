@@ -20,11 +20,9 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "devices/input.h"
-#include "debug_helper.h"
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
-void print_pagedir(uint32_t* pagedir);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -468,13 +466,8 @@ load (const char *file_name, void (**eip) (void), void **esp)
   *eip = (void (*) (void)) ehdr.e_entry;
   success = true;
 
-  print_pagedir(t->pagedir);
- done:
+  done:
   /* We arrive here whether the load is successful or not. */
-  if(!success)
-  {
-    DPRINTF("load function failed\n");
-  }
   file_close (file);
   lock_release(&filesys_lock);
   return success;
@@ -626,19 +619,4 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
-}
-
-// debug helper for visualizing the page_dir
-void print_pagedir(uint32_t* pagedir)
-{
-  int i;
-  uint32_t pdent;
-  for(i = 0; i < 1024; ++i)
-  {
-    pdent = pagedir[i];
-    if(pdent)
-    {
-      DPRINTF("-----entry no = %d---value %x\n", i, pdent);
-    }
-  }
 }

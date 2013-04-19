@@ -85,7 +85,7 @@ dir_get_inode (struct dir *dir)
 }
 
 /* Searches DIR for a file with the given NAME.
-   If successful, returns true, sets *EP to the directory entry
+If successful, returns true, sets *EP to the directory entry
    if EP is non-null, and sets *OFSP to the byte offset of the
    directory entry if OFSP is non-null.
    otherwise, returns false and ignores EP and OFSP. */
@@ -144,7 +144,7 @@ dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
 {
   struct dir_entry e;
   off_t ofs;
-  bool success = false;
+bool success = false;
 
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
