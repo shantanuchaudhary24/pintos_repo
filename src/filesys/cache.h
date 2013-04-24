@@ -14,14 +14,15 @@
 
 /* Function Declaration*/
 void bcache_init(void);
-bool read_cache(struct block *block, block_sector_t sector, void *buffer);
-bool write_cache(struct block *block, block_sector_t sector, void *buffer);
-bool insert_cache(struct block *block, block_sector_t sector, void *buffer, int insert_type);
-void update_time(void);
+void read_cache( block_sector_t sector, void *buffer);
+void write_cache(block_sector_t sector,const void *buffer);
+void insert_cache_write(block_sector_t sector, const void *buffer);
+void insert_cache_read( block_sector_t sector, void *buffer);
 int evict_cache(void);
 void write_cache_to_disk(int index);
 void flush_cache(void);
 int find_cache_entry(block_sector_t sector);
+int index_for_insertion(void);
 
 
 typedef struct buf
@@ -29,7 +30,6 @@ typedef struct buf
 	int flag;
 	int accessed;
 	block_sector_t sector;
-	struct block *block;
 	void *data;
 }struct_buf;
 

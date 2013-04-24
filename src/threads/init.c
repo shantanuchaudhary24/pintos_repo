@@ -34,6 +34,7 @@
 #include "tests/threads/tests.h"
 #endif
 #ifdef FILESYS
+#include "filesys/cache.h"
 #include "devices/block.h"
 #include "devices/ide.h"
 #include "filesys/filesys.h"
@@ -136,6 +137,7 @@ main (void)
   usb_storage_init ();
   ide_init ();
   locate_block_devices ();
+  bcache_init();
   filesys_init (format_filesys);
 #endif
 
