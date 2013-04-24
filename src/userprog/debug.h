@@ -8,6 +8,7 @@
 //#define DEBUG_PROCESS
 //#define DEBUG_MMF
 //#define DEBUG_SYSCALL
+//#define DEBUG_CACHE
 
 #ifndef DEBUG_EXCEPTION
 	#define DPRINT_EXCEP(str,arg)
@@ -72,4 +73,13 @@
 #ifndef DEBUG_MMF
 	#define DPRINT_MMF(str,arg)
 	#define DPRINTF_MMF(str)
+#endif
+
+#ifdef DEBUG_CACHE
+	#define DPRINT_CACHE(str,arg) printf(str,arg)
+	#define DPRINTF_CACHE(str) printf(str)
+#endif
+#ifndef DEBUG_CACHE
+	#define DPRINT_CACHE(str,arg)
+	#define DPRINTF_CACHE(str)
 #endif
