@@ -21,10 +21,15 @@ static int clock_hand;
 /* Lock for access to bcache array*/
 struct lock bcache_lock;
 
+/* For periodic flushing of cache*/
+int time;
+
 /* Function Declaration*/
 void bcache_init(void);
 void read_cache(block_sector_t sector, void *buffer);
 void write_cache(block_sector_t sector,const void *buffer);
+void read_cache_bounce(block_sector_t sector,void *buffer, int ofs, int chunk_size);
+void write_cache_bounce(block_sector_t sector, void *buffer, int ofs, int chunk_size);
 void insert_cache_write(block_sector_t sector, const void *buffer);
 void insert_cache_read(block_sector_t sector, void *buffer);
 int evict_cache(void);
@@ -32,6 +37,7 @@ void write_cache_to_disk(int index);
 void flush_cache(void);
 int find_cache_entry(block_sector_t sector);
 int index_for_insertion(void);
+void update_time(void);
 
 /* Initialise the buffer cache pre-requisites
  * Initialises the bcache_lock and nulls out the
@@ -77,17 +83,36 @@ void write_cache(block_sector_t sector,const void *buffer)
 	else insert_cache_write(sector,buffer);
 }
 
+void read_cache_bounce(block_sector_t sector,void *buffer, int ofs, int chunk_size)
+{
+	uint8_t *bounce=malloc(BLOCK_SECTOR_SIZE);
+	read_cache(sector,bounce);
+	memcpy(buffer, bounce+ofs, chunk_size);
+	free(bounce);
+}
+
+void write_cache_bounce(block_sector_t sector, void *buffer, int ofs, int chunk_size)
+{
+	uint8_t *bounce=malloc(BLOCK_SECTOR_SIZE);
+	if((ofs > 0) || (chunk_size < (BLOCK_SECTOR_SIZE - ofs)))
+		read_cache(sector,bounce);
+	else memset(bounce,0,BLOCK_SECTOR_SIZE);
+
+	memcpy(bounce+ofs, buffer, chunk_size);
+	write_cache(sector, bounce);
+	free(bounce);
+	
+}
+
 void insert_cache_write(block_sector_t sector, const void *buffer)
 {
 	int index=index_for_insertion();
-	//printf("insert_cache_write:acquired lock bcache\n");
 	lock_acquire(&bcache_lock);
 	bcache[index].sector=sector;
 	bcache[index].accessed=1;
 	bcache[index].flag=BUFFER_DIRTY;
 	memcpy((&bcache[index])->data, buffer,BLOCK_SECTOR_SIZE);
 	lock_release(&bcache_lock);
-	//printf("insert_cache_write:released lock bcache\n");
 	DPRINTF_CACHE("insert_cache_write:COMPLETE\n");
 	return;
 }
@@ -96,7 +121,6 @@ void insert_cache_write(block_sector_t sector, const void *buffer)
 void insert_cache_read(block_sector_t sector, void *buffer)
 {
 	int index=index_for_insertion();
-	//printf("insert_cache_read:acquired lock bcache\n");
 	lock_acquire(&bcache_lock);
 	bcache[index].sector=sector;
 	bcache[index].accessed=1;
@@ -104,7 +128,6 @@ void insert_cache_read(block_sector_t sector, void *buffer)
 	block_read(block_get_role(BLOCK_FILESYS),sector,(&bcache[index])->data);
 	memcpy(buffer,(&bcache[index])->data,BLOCK_SECTOR_SIZE);
 	lock_release(&bcache_lock);
-	//printf("insert_cache_read:released lock bcache\n");
 	DPRINTF_CACHE("insert_cache_read:COMPLETE\n");
 	return;
 }
@@ -150,12 +173,10 @@ void write_cache_to_disk(int index)
 	DPRINT_CACHE("write_cache_to_disk:sector:%d\n",bcache[index].sector);
 
 	block_write(block_get_role(BLOCK_FILESYS),bcache[index].sector,(&bcache[index])->data);
-	//printf("write_cache_to_disk:acquired lock bcache\n");
 	lock_acquire(&bcache_lock);
 	free((&bcache[index])->data);
 	bcache[index]=null_cache_entry;
 	lock_release(&bcache_lock);
-	//printf("write_cache_to_disk:released lock bcache\n");
 	DPRINTF_CACHE("write_cache_to_disk:COMPLETE\n");
 }
 
@@ -188,3 +209,11 @@ int find_cache_entry(block_sector_t sector)
 	return -1;
 }
 
+void update_time(void)
+{
+	if(timer_elapsed(time) >= TWENTY_SECONDS)
+	{
+		time=timer_ticks();
+		flush_cache();
+	}
+}

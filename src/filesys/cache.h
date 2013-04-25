@@ -11,11 +11,14 @@
 #define INSERT_READ 0
 #define INSERT_WRITE 1
 #define MARK_EMPTY -1
+#define TWENTY_SECONDS TIMER_FREQ*20
 
 /* Function Declaration*/
 void bcache_init(void);
 void read_cache( block_sector_t sector, void *buffer);
 void write_cache(block_sector_t sector,const void *buffer);
+void read_cache_bounce(block_sector_t sector,void *buffer, int ofs, int chunk_size);
+void write_cache_bounce(block_sector_t sector, void *buffer, int ofs, int chunk_size);
 void insert_cache_write(block_sector_t sector, const void *buffer);
 void insert_cache_read( block_sector_t sector, void *buffer);
 int evict_cache(void);
