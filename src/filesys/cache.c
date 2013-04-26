@@ -64,7 +64,7 @@ void read_cache( block_sector_t sector, void *buffer)
 	int index_to_cache=find_cache_entry(sector);
 	if( (index_to_cache >= 0) && (index_to_cache < CACHE_SIZE) )
 	{
-		bcache[index_to_cache].accessed++;
+		bcache[index_to_cache].flag=BUFFER_VALID;
 		memcpy(buffer,(&bcache[index_to_cache])->data, BLOCK_SECTOR_SIZE);
 	}
 	else insert_cache_read(sector,buffer);
@@ -76,7 +76,6 @@ void write_cache(block_sector_t sector,const void *buffer)
 	int index_to_cache=find_cache_entry(sector);
 	if( (index_to_cache >= 0) && (index_to_cache < CACHE_SIZE) )
 	{
-		bcache[index_to_cache].accessed++;
 		bcache[index_to_cache].flag=BUFFER_DIRTY;
 		memcpy((&bcache[index_to_cache])->data, buffer, BLOCK_SECTOR_SIZE);
 	}
@@ -182,14 +181,24 @@ void write_cache_to_disk(int index)
 
 void flush_cache(void)
 {
-	int index=0;
+	int index=0,dirty_entries=0;
+	
 	while(index<CACHE_SIZE)
 	{
-		if(bcache[index].flag & BUFFER_DIRTY)
+		DPRINTF_CACHE("bcache index stats: ");
+		DPRINT_CACHE("sector:%d ", bcache[index].sector);
+		DPRINT_CACHE("flag:%d ", bcache[index].flag);
+		DPRINT_CACHE("accessed:%d\n",bcache[index].accessed);
+		
+		if( bcache[index].flag==BUFFER_DIRTY )
+		{
 			block_write(block_get_role(BLOCK_FILESYS),bcache[index].sector,(&bcache[index])->data);
+			dirty_entries++;
+		}
 		index++;
 	}
-	DPRINTF_CACHE("flush_cache:COMPLETE\n");	
+	DPRINTF_CACHE("flush_cache:COMPLETE ");
+	DPRINT_CACHE("dirty_entries:%d\n",dirty_entries);	
 }
 
 int find_cache_entry(block_sector_t sector)
@@ -201,6 +210,7 @@ int find_cache_entry(block_sector_t sector)
 		if(bcache[index_to_cache].sector==sector)
 		{
 			DPRINT_CACHE("find_cache_entry:INDEX RETURNED:%d\n",index_to_cache);
+			bcache[index_to_cache].accessed++;
 			return index_to_cache;
 		}
 		index_to_cache++;

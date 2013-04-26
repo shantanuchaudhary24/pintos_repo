@@ -8,7 +8,7 @@
 //#define DEBUG_PROCESS
 //#define DEBUG_MMF
 //#define DEBUG_SYSCALL
-//#define DEBUG_CACHE
+#define DEBUG_CACHE
 
 #ifndef DEBUG_EXCEPTION
 	#define DPRINT_EXCEP(str,arg)
