@@ -14,6 +14,7 @@
 
 /* Function Declaration*/
 void bcache_init(void);
+void read_ahead_thread(block_sector_t sector);
 void read_cache(block_sector_t sector, void *buffer);
 void write_cache(block_sector_t sector,const void *buffer);
 void read_cache_bounce(block_sector_t sector,void *buffer, int ofs, int chunk_size);

@@ -27,18 +27,20 @@ int time;
 
 /* Function Declaration*/
 void bcache_init(void);
+void read_ahead_thread(block_sector_t sector);
 void read_cache(block_sector_t sector, void *buffer);
 void write_cache(block_sector_t sector,const void *buffer);
 void read_cache_bounce(block_sector_t sector,void *buffer, int ofs, int chunk_size);
 void write_cache_bounce(block_sector_t sector, void *buffer, int ofs, int chunk_size);
 void flush_cache(void);
-static void insert_cache_write(block_sector_t sector, const void *buffer);
-static void insert_cache_read(block_sector_t sector, void *buffer);
+static int insert_cache_write(block_sector_t sector);
+static int insert_cache_read(block_sector_t sector);
 static int evict_cache(void);
 static void write_cache_to_disk(int index);
 static int find_cache_entry(block_sector_t sector);
 static int index_for_insertion(void);
 static void write_back_func(void *aux UNUSED);
+static void read_ahead_func(void *aux);
 
 
 /* Initialise the buffer cache pre-requisites
@@ -70,17 +72,34 @@ void write_back_func(void *aux UNUSED)
 	}
 }
 
+void read_ahead_thread(block_sector_t sector)
+{
+	block_sector_t *temp = malloc(sizeof(block_sector_t));
+	if(temp!=NULL)
+	{
+		*temp=sector+1;
+		thread_create("filesys_cache_read_ahead",0,read_ahead_func, temp);
+	}
+}
+
+void read_ahead_func(void *aux)
+{
+	block_sector_t sector= *(block_sector_t *)aux;
+	insert_cache_read(sector);
+	free(aux);
+}
 
 void read_cache( block_sector_t sector, void *buffer)
 {
 	DPRINT_CACHE("read_cache:%x\n",sector);
 	int index_to_cache=find_cache_entry(sector);
 	if( (index_to_cache >= 0) && (index_to_cache < CACHE_SIZE) )
-	{
-		bcache[index_to_cache].flag=BUFFER_VALID;
 		memcpy(buffer,(&bcache[index_to_cache])->data, BLOCK_SECTOR_SIZE);
+	else 
+	{
+		index_to_cache=insert_cache_read(sector);
+		memcpy(buffer,(&bcache[index_to_cache])->data,BLOCK_SECTOR_SIZE);
 	}
-	else insert_cache_read(sector,buffer);
 }
 
 void write_cache(block_sector_t sector,const void *buffer)
@@ -92,45 +111,48 @@ void write_cache(block_sector_t sector,const void *buffer)
 		bcache[index_to_cache].flag=BUFFER_DIRTY;
 		memcpy((&bcache[index_to_cache])->data, buffer, BLOCK_SECTOR_SIZE);
 	}
-	else insert_cache_write(sector,buffer);
+	else 
+	{
+		index_to_cache=insert_cache_write(sector);
+		memcpy((&bcache[index_to_cache])->data, buffer,BLOCK_SECTOR_SIZE);
+	}
 }
 
 void read_cache_bounce(block_sector_t sector,void *buffer, int ofs, int chunk_size)
 {
-	uint8_t *bounce=malloc(BLOCK_SECTOR_SIZE);
-	read_cache(sector,bounce);
-	memcpy(buffer, bounce+ofs, chunk_size);
-	free(bounce);
+	uint8_t *temp_buffer=malloc(BLOCK_SECTOR_SIZE);
+	read_cache(sector,temp_buffer);
+	memcpy(buffer, temp_buffer+ofs, chunk_size);
+	free(temp_buffer);
 }
 
 void write_cache_bounce(block_sector_t sector, void *buffer, int ofs, int chunk_size)
 {
-	uint8_t *bounce=malloc(BLOCK_SECTOR_SIZE);
+	uint8_t *temp_buffer=malloc(BLOCK_SECTOR_SIZE);
 	if((ofs > 0) || (chunk_size < (BLOCK_SECTOR_SIZE - ofs)))
-		read_cache(sector,bounce);
-	else memset(bounce,0,BLOCK_SECTOR_SIZE);
+		read_cache(sector,temp_buffer);
+	else memset(temp_buffer,0,BLOCK_SECTOR_SIZE);
 
-	memcpy(bounce+ofs, buffer, chunk_size);
-	write_cache(sector, bounce);
-	free(bounce);
+	memcpy(temp_buffer+ofs, buffer, chunk_size);
+	write_cache(sector, temp_buffer);
+	free(temp_buffer);
 	
 }
 
-void insert_cache_write(block_sector_t sector, const void *buffer)
+int insert_cache_write(block_sector_t sector)
 {
 	int index=index_for_insertion();
 	lock_acquire(&bcache_lock);
 	bcache[index].sector=sector;
 	bcache[index].accessed=1;
 	bcache[index].flag=BUFFER_DIRTY;
-	memcpy((&bcache[index])->data, buffer,BLOCK_SECTOR_SIZE);
 	lock_release(&bcache_lock);
 	DPRINT_CACHE("insert_cache_write:INSERTED AT:%d\n",index);
-	return;
+	return index;
 }
 
 
-void insert_cache_read(block_sector_t sector, void *buffer)
+int insert_cache_read(block_sector_t sector)
 {
 	int index=index_for_insertion();
 	lock_acquire(&bcache_lock);
@@ -138,10 +160,9 @@ void insert_cache_read(block_sector_t sector, void *buffer)
 	bcache[index].accessed=1;
 	bcache[index].flag=BUFFER_VALID;
 	block_read(block_get_role(BLOCK_FILESYS),sector,(&bcache[index])->data);
-	memcpy(buffer,(&bcache[index])->data,BLOCK_SECTOR_SIZE);
 	lock_release(&bcache_lock);
 	DPRINT_CACHE("insert_cache_read:INSERTED AT\n",index);
-	return;
+	return index;
 }
 
 int index_for_insertion(void)
