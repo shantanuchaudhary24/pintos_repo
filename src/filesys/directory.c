@@ -9,9 +9,9 @@
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool
-dir_create (block_sector_t sector, size_t entry_cnt)
+dir_create (block_sector_t sector)
 {
-  return inode_create (sector, entry_cnt * sizeof (struct dir_entry),true);
+  return inode_create (sector, 0,true);
 }
 
 /* Opens and returns the directory for the given INODE, of which
@@ -238,6 +238,15 @@ bool success = false;
   e.inode_sector = inode_sector;
 //  printf("inode write %x, ofd %d\n",dir->inode,ofs);
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
+  if(success)
+  {
+//	  if(dir->inode->data.length<ofs+sizeof e)
+	  {
+		  dir->inode->data.length=ofs+sizeof e;
+//		  printf("new size %d after making %s in %x\n",ofs+sizeof e,name,dir->inode);
+		  block_write(fs_device,dir->inode->sector,&dir->inode->data);
+	  }
+  }
 //	printf("exiting dir add %d\n",success);
 
  done:
@@ -270,6 +279,16 @@ dir_remove (const char *name)
   inode = inode_open (e.inode_sector);
   if (inode == NULL)
     goto done;
+
+  block_read(fs_device,inode->sector,&inode->data);
+//	  dir->inode->data.length-=sizeof e;
+//  printf("after delete size is %d\n",dir->inode->data.length);
+
+  if(inode->data.length!=sizeof(struct dir_entry))
+  {
+//	  printf("not deleting %d\n",inode->data.length);
+	  goto done;
+  }
 
   /* Erase directory entry. */
   e.in_use = false;

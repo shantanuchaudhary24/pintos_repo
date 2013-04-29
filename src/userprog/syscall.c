@@ -155,12 +155,15 @@ static void syscall_handler (struct intr_frame *f)
         return;
       case SYS_MKDIR:
       	{
-//      		printf("\n\n\ndid come here\n");
-      		return sys_mkdir((char*)get_valid_val(arg+1));
+      		bool ret = sys_mkdir((char*)get_valid_val(arg+1));
+//      		printf("\n\n\ndid come here %d\n",ret);
+      		f->eax=ret;
+      		return;
       	}
       case SYS_CHDIR:
       	{
-      		return sys_chdir((char*)get_valid_val(arg+1));
+      		f->eax=sys_chdir((char*)get_valid_val(arg+1));
+      		return;
       	}
 
 //      case SYS_READDIR:
@@ -225,8 +228,9 @@ bool sys_mkdir(char* path)
 //	}
 
 //	return filesys_create_folder(&thread_current()->cwd,path,100);
-	bool ret=filesys_create_folder(path,100);
+	bool ret=filesys_create_folder(path);
 //	printf("mkdir is returning %d\n",ret);
+	return ret;
 }
 
 //bool sys_readdir(int fd, char* name)

@@ -162,7 +162,8 @@ chdir (const char *dir)
 bool
 mkdir (const char *dir)
 {
-  return syscall1 (SYS_MKDIR, dir);
+  bool ret = syscall1 (SYS_MKDIR, dir);
+//  printf("syscall mkdir returning %d\n",ret);
 }
 
 bool

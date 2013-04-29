@@ -110,7 +110,7 @@ filesys_create (const char *name, off_t initial_size)
   return success;
 }
 
-bool filesys_create_folder (const char* name, off_t initial_size)
+bool filesys_create_folder (const char* name)
 {
   struct inode* inode=inode_by_path(name,true);
   struct dir* dir=dir_open(inode);
@@ -126,7 +126,7 @@ bool filesys_create_folder (const char* name, off_t initial_size)
   block_sector_t inode_sector = 0;
   bool success = (dir != NULL
 				  && free_map_allocate (1, &inode_sector)
-				  && inode_create (inode_sector, initial_size, true)
+				  && inode_create (inode_sector, 0, true)
 				  && dir_add (dir, filename_from_path(name), inode_sector));
   if (!success && inode_sector != 0)
 	free_map_release (inode_sector, 1);
@@ -135,7 +135,7 @@ bool filesys_create_folder (const char* name, off_t initial_size)
   {
 	  struct dir* dir_new=dir_open(inode_by_path(name,false));
 	  ASSERT(dir);
-	  dir_add(dir,"..",inode->sector);
+	  dir_add(dir_new,"..",inode->sector);
 //	  dir_close(dir);
 	  free(dir);
   }
@@ -186,7 +186,7 @@ do_format (void)
   printf ("Formatting file system...");
   free_map_create ();
 //  printf("this part done\n");
-  if (!dir_create (ROOT_DIR_SECTOR, 16))
+  if (!dir_create (ROOT_DIR_SECTOR))
     PANIC ("root directory creation failed");
   free_map_close ();
 //  printf ("done.\n");
