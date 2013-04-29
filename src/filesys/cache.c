@@ -25,7 +25,7 @@ struct lock bcache_lock;
 /* For periodic flushing of cache*/
 int time;
 
-/* Function Declaration*/
+/* Function Declarations*/
 void bcache_init(void);
 void read_ahead_thread(block_sector_t sector);
 void read_cache(block_sector_t sector, void *buffer);
@@ -46,7 +46,8 @@ static void read_ahead_func(void *aux);
 /* Initialise the buffer cache pre-requisites
  * Initialises the bcache_lock and nulls out the
  * entries in the bcache array.Also sets the time
- * variable to the current time.
+ * marks the clock entry as -1.Creates a thread for
+ * periodic flushing of cache.
  * */
 void bcache_init(void)
 {
@@ -63,6 +64,10 @@ void bcache_init(void)
 	DPRINTF_CACHE("bcache_init:CACHE INITIALIZED\n");	
 }
 
+
+/* Function called in filesys_cache_write_behind
+ * thread for periodic flushing of cache.
+ * */
 void write_back_func(void *aux UNUSED)
 {
 	while(true)
@@ -72,6 +77,9 @@ void write_back_func(void *aux UNUSED)
 	}
 }
 
+/* Function for creating a thread for reading
+ * blocks to the buffer cache in advance.
+ * */
 void read_ahead_thread(block_sector_t sector)
 {
 	block_sector_t *temp = malloc(sizeof(block_sector_t));
@@ -82,6 +90,9 @@ void read_ahead_thread(block_sector_t sector)
 	}
 }
 
+/* Function used by filesys_cache_read_ahead thread
+ * to read the block into the cache in advance.
+ * */
 void read_ahead_func(void *aux)
 {
 	block_sector_t sector= *(block_sector_t *)aux;
@@ -89,6 +100,13 @@ void read_ahead_func(void *aux)
 	free(aux);
 }
 
+/* Function for reading the entries from buffer cache
+ * into the buffer. It takes a sector as input, finds
+ * the corresponding entry in buffer cache and copies
+ * it to buffer.If entry is not found then it is brought
+ * in from the disk by evicting an existing entry from
+ * buffer cache.
+ * */
 void read_cache( block_sector_t sector, void *buffer)
 {
 	DPRINT_CACHE("read_cache:%x\n",sector);
@@ -102,6 +120,14 @@ void read_cache( block_sector_t sector, void *buffer)
 	}
 }
 
+/* Function for writing the entries from buffer cache
+ * into the buffer. It takes a sector as input, finds
+ * the corresponding entry in buffer cache and copies
+ * data from buffer into the buffer cache entry field.
+ * If entry is not found then an entry is evicted from
+ * the buffer cache and data from buffer is written to
+ * it and marked dirty.
+ * */
 void write_cache(block_sector_t sector,const void *buffer)
 {
 	DPRINT_CACHE("write_cache:%x\n",sector);
@@ -118,6 +144,7 @@ void write_cache(block_sector_t sector,const void *buffer)
 	}
 }
 
+
 void read_cache_bounce(block_sector_t sector,void *buffer, int ofs, int chunk_size)
 {
 	uint8_t *temp_buffer=malloc(BLOCK_SECTOR_SIZE);
@@ -125,6 +152,7 @@ void read_cache_bounce(block_sector_t sector,void *buffer, int ofs, int chunk_si
 	memcpy(buffer, temp_buffer+ofs, chunk_size);
 	free(temp_buffer);
 }
+
 
 void write_cache_bounce(block_sector_t sector, void *buffer, int ofs, int chunk_size)
 {
@@ -139,6 +167,11 @@ void write_cache_bounce(block_sector_t sector, void *buffer, int ofs, int chunk_
 	
 }
 
+/* Function for inserting a write entry into the buffer
+ * cache array.It acquires the index at which the
+ * sector data is to be inserted and then sets the 
+ * variables accordingly and returns that index.
+ * */
 int insert_cache_write(block_sector_t sector)
 {
 	int index=index_for_insertion();
@@ -151,7 +184,13 @@ int insert_cache_write(block_sector_t sector)
 	return index;
 }
 
-
+/* Function for inserting a read entry into the buffer
+ * cache array.It acquires the index at which the
+ * sector data is to be inserted and then sets the 
+ * variables accordingly and reads the data from disk
+ * into the buffer cache entry chosen to be inserted
+ * and then it returns the index.
+ * */
 int insert_cache_read(block_sector_t sector)
 {
 	int index=index_for_insertion();
@@ -165,6 +204,12 @@ int insert_cache_read(block_sector_t sector)
 	return index;
 }
 
+/* Finds a suitable index for inserting an entry
+ * (read/write) into the buffer cache.First it checks
+ * if the buffer cache contains any null entry.Returns
+ * the null entry if found any.Else it evicts an entry
+ * and returns its index for insertion.
+ * */
 int index_for_insertion(void)
 {
 	int index=0;
@@ -181,6 +226,12 @@ int index_for_insertion(void)
 	return index;
 }
 
+/* Function for evicting cache. Uses clock algorithm
+ * to select which entry to evict.Decrements the accessed
+ * field everytime the clock hand passes over the entry.
+ * Writes the entry to disk and returns the index of the
+ * buffer cache it evicted.
+ * */
 int evict_cache(void)
 {
 	int start_point=clock_hand++;
@@ -199,6 +250,9 @@ int evict_cache(void)
 	return clock_hand;
 }
 
+/* Writes the entries marked dirty to the 
+ * disk.Marks the entry written to disk as null.
+ * */
 void write_cache_to_disk(int index)
 {
 	DPRINT_CACHE("write_cache_to_disk:bcache[index]:%d\n",index);	
@@ -216,6 +270,9 @@ void write_cache_to_disk(int index)
 	DPRINTF_CACHE("write_cache_to_disk:COMPLETE\n");
 }
 
+/* Writes the cache entries marked as DIRTY
+ * to the disk.
+ * */
 void flush_cache(void)
 {
 	int index=0,dirty_entries=0;
@@ -237,6 +294,11 @@ void flush_cache(void)
 	DPRINT_CACHE("flush_cache:FLUSHED %d dirty_entries\n",dirty_entries);
 }
 
+/* Used to find an entry in the buffer cache.
+ * Traverses through the array to look for the entry
+ * and matches the sector given as the argument. Returns
+ * the index if sector matches otherwise it returns -1.
+ * */
 int find_cache_entry(block_sector_t sector)
 {
 	DPRINT_CACHE("find_cache_entry:FOR SECTOR:%x\n",sector);
