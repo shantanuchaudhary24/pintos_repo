@@ -102,6 +102,24 @@ lookup (const struct dir *dir, const char *name,
   return false;
 }
 
+//static bool readdir_entry (const struct inode *inode, const char *name)
+//{
+//  struct dir_entry e;
+//  size_t ofs=inode->;
+//
+//  ASSERT (inode != NULL);
+//  ASSERT (name != NULL);
+//
+////  printf("now reading through various dir entries\n");
+//  if(inode_read_at (inode, &e, sizeof e, ofs) == sizeof e)
+//      if (e.in_use)
+//      {
+//    	  strlcpy(name,e.name,15);
+//    	  return true;
+//      }
+//  return false;
+//}
+
 /* Searches DIR for a file with the given NAME
    and returns true if one exists, false otherwise.
    On success, sets *INODE to an inode for the file, otherwise to
@@ -130,7 +148,7 @@ dir_lookup_by_inode (const struct inode *inode, const char *name)//, struct dir_
   struct dir_entry e;
   size_t ofs;
 
-  printf("dir_lookup %s\n",name);
+//  printf("dir_lookup %s\n",name);
 
   ASSERT (inode != NULL);
   ASSERT (name != NULL);
@@ -157,7 +175,7 @@ dir_lookup_by_inode (const struct inode *inode, const char *name)//, struct dir_
 //  }
 //  printf("read size: %d, sector %d\n",inode_read_at (inode, &e, sizeof e, 0),inode->data.start);
 
-  printf("sending back a devil while looking for %s\n",name);
+//  printf("sending back a devil while looking for %s\n",name);
   e.inode_sector=666666;
   return e;//false;
 }
@@ -185,8 +203,12 @@ bool success = false;
 
   /* Check that NAME is not in use. */
   if (lookup (dir, name, NULL, NULL))
-    goto done;
-
+  {
+//	  printf("file exists\n");
+	  goto done;
+  }
+//  else
+//	  printf("lookup done, file doesnt exist yet\n");
   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
      current end-of-file.
@@ -196,9 +218,14 @@ bool success = false;
      read due to something intermittent such as low memory. */
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
-    if (!e.in_use)
-      break;
-
+  {
+//	  printf("name of directory entry is %s\n",e.name);
+	  if (!e.in_use)
+    {
+//    	printf("normal break\n");
+    	break;
+    }
+  }
   if(ofs==0)
   {
 //	  printf("offset is zero\n");
@@ -209,10 +236,13 @@ bool success = false;
   e.in_use = true;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
+//  printf("inode write %x, ofd %d\n",dir->inode,ofs);
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
 //	printf("exiting dir add %d\n",success);
 
  done:
+// if(!success)
+//	 printf("dir add failed, %d\n",ofs);
   return success;
 }
 

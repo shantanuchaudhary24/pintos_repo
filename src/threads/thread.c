@@ -197,6 +197,7 @@ thread_create (const char *name, int priority,
   old_level = intr_disable ();
 
   t->parent_tid = thread_current()->tid;
+  t->cwd.inode=thread_current()->cwd.inode;
   if(thread_current()->tid != 1)
     t->parent_waiting_exec = thread_current();
 

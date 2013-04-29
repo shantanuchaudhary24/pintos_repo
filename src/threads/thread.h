@@ -6,6 +6,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/synch.h"
+#include "filesys/directory.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -124,6 +125,7 @@ struct thread
                                         // waiting for load to complete and get the 
                                         // correct tid after load.
 
+    struct dir cwd;
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
   };

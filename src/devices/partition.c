@@ -315,6 +315,7 @@ static void
 partition_write (void *p_, block_sector_t sector, const void *buffer)
 {
   struct partition *p = p_;
+//  printf("part write, %d\n",sector);
   block_write (p->block, p->start + sector, buffer);
 }
 

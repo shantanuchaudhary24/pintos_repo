@@ -6,6 +6,7 @@
 #include "devices/ide.h"
 #include "threads/malloc.h"
 #include "threads/synch.h"
+#include "threads/thread.h"
 
 /* A block device. */
 struct block
@@ -123,6 +124,10 @@ check_sector (struct block *block, block_sector_t sector)
 void
 block_read (struct block *block, block_sector_t sector, void *buffer)
 {
+//	  if(sector>block->size)
+//	  {
+//		  printf("frome read, sector is %u\n",sector);
+//	  }
   check_sector (block, sector);
   block->ops->read (block->aux, sector, buffer);
   lock_acquire (&block->lock);
@@ -138,12 +143,19 @@ block_read (struct block *block, block_sector_t sector, void *buffer)
 void
 block_write (struct block *block, block_sector_t sector, const void *buffer)
 {
+//  if(block==fs_device)
+//	  printf("%d, block_Write: %d,\n",thread_current()->tid,sector);
+
+
   check_sector (block, sector);
   ASSERT (block->type != BLOCK_FOREIGN);
   block->ops->write (block->aux, sector, buffer);
   lock_acquire (&block->lock);
   block->write_cnt++;
   lock_release (&block->lock);
+
+//  if(block==fs_device)
+//	  printf("%d is done\n",sector);
 }
 
 /* Returns the number of sectors in BLOCK. */

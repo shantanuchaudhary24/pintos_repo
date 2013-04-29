@@ -51,10 +51,13 @@ char* filename_from_path(char* path)
        for(;i<strlen(path);i++)
        {
                if(path[i]=='/')
-                       mark=i+1;
+               {
+            	   if(i+1<strlen(path)&&(path[i+1]!='.'||(i+2<strlen(path)&&path[i+2]=='.'&&path[i+1]=='.')))
+            			   mark=i+1;
+               }
        }
 
-		printf("filename from path %s is %s\n",path,path+mark);
+//		printf("filename from path %s is %s\n",path,path+mark);
 
        return path+mark;
 }
@@ -70,8 +73,10 @@ filesys_create (const char *name, off_t initial_size)
   block_sector_t inode_sector = 0;
 //  struct dir *dir = dir_open_root ();
 
+//  printf("was here\n");
   if(strlen(filename_from_path(name))==0||strlen(filename_from_path(name))>14)
 	  return false;
+//  printf("was here\n");
 
   struct inode* inode=inode_by_path(name,true);
   struct dir* dir=dir_open(inode);
@@ -83,6 +88,7 @@ filesys_create (const char *name, off_t initial_size)
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, false)
                   && dir_add (dir, filename_from_path(name), inode_sector));
+//  printf("was here\n");
 
   struct inode* in;
 //  ASSERT(success);
@@ -90,7 +96,10 @@ filesys_create (const char *name, off_t initial_size)
 //  ASSERT(dir_lookup(dir,filename_from_path(name),&in));
 
   if (!success && inode_sector != 0) 
-    free_map_release (inode_sector, 1);
+  {
+//	  printf("was here\n");
+	  free_map_release (inode_sector, 1);
+  }
 //  printf("got here\n");
 
   //big problem beloWWWWWWW
@@ -106,11 +115,11 @@ bool filesys_create_folder (const char* name, off_t initial_size)
   struct inode* inode=inode_by_path(name,true);
   struct dir* dir=dir_open(inode);
 
-  printf("length of %s is %d\n",name,strlen(name));
+//  printf("length of %s is %d\n",name,strlen(name));
 
   if(strlen(filename_from_path(name))==0||strlen(filename_from_path(name))>14)
   {
-	  printf("returniing false\n");
+//	  printf("returniing false\n");
 	  return false;
   }
 
@@ -122,6 +131,13 @@ bool filesys_create_folder (const char* name, off_t initial_size)
   if (!success && inode_sector != 0)
 	free_map_release (inode_sector, 1);
 
+  if(success)
+  {
+	  struct dir* dir_new=dir_open(inode_by_path(name,false));
+	  ASSERT(dir);
+	  dir_add(dir,"..",inode->sector);
+	  dir_close(dir);
+  }
   return success;
 }
 

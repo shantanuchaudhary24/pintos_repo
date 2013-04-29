@@ -42,7 +42,7 @@ static void syscall_handler (struct intr_frame *f)
     thread_current()->stack=f->esp;
     // get sys call number off the stack
     int sys_call_no = get_valid_val(arg);
-    if(sys_call_no== -1 || sys_call_no<SYS_HALT || sys_call_no>SYS_MUNMAP)
+    if(sys_call_no== -1 || sys_call_no<SYS_HALT || sys_call_no>SYS_INUMBER)
         {
             thread_current()->exit_status=-1;
             process_terminate();
@@ -153,6 +153,20 @@ static void syscall_handler (struct intr_frame *f)
         	sys_close(fd);
         }
         return;
+      case SYS_MKDIR:
+      	{
+//      		printf("\n\n\ndid come here\n");
+      		return sys_mkdir((char*)get_valid_val(arg+1));
+      	}
+      case SYS_CHDIR:
+      	{
+      		return sys_chdir((char*)get_valid_val(arg+1));
+      	}
+
+//      case SYS_READDIR:
+//      {
+//    	  return sys_readdir((int)get_valid_val(arg+1),(char*)get_valid_val(arg+2));
+//      }
         /*
       case SYS_MMAP:
       case SYS_MUNMAP:
@@ -189,6 +203,58 @@ void process_terminate(void)
   thread_exit();
 }
 
+bool sys_mkdir(char* path)
+{
+	struct inode* cwd = thread_current()->cwd.inode;
+
+//	printf("mkdir: %s\n",path);
+//	int i=0,mark=-1;
+//	for(;i<strlen(path);i++)
+//	{
+//		if(path[i]=='/')
+//			mark=i;
+//	}
+
+//	if(mark>-1)
+//	{
+////		printf("the name is %s\n",path[mark+1]);
+//		path[mark]=0;
+//		struct inode* inode=inode_by_path(path,false);
+//		struct dir* dir=dir_open(inode);
+//		return filesys_create_folder(dir,filename_from_path(path),100);
+//	}
+
+//	return filesys_create_folder(&thread_current()->cwd,path,100);
+	bool ret=filesys_create_folder(path,100);
+//	printf("mkdir is returning %d\n",ret);
+}
+
+//bool sys_readdir(int fd, char* name)
+//{
+//  if(fd >= 0 && fd < FDTABLESIZE) // is valid FD?
+//  {
+//	struct thread *t = thread_current ();
+//	struct file* fi = t->fd_table[fd];
+//	if(fi)
+//	{
+////	  if(!fi->inode->isDir)
+////		  return false;
+//	  lock_acquire(&filesys_lock);
+//	  dir_open(fi)
+//	  lock_release(&filesys_lock);
+//	}
+//  }
+//}
+
+bool sys_chdir(char* path)
+{
+	struct inode* node=inode_by_path(path,false);
+	if(node==0)
+		return false;
+
+	thread_current()->cwd.inode=node;
+	return true;
+}
 
 int sys_exec(char* filename)
 {
@@ -219,6 +285,7 @@ int sys_exec(char* filename)
 
 int sys_open(char* file_name)
 {
+//	printf("now opening file\n");
   if(!*file_name)  // empty string check
     return -1;
   struct thread *t = thread_current ();
@@ -247,8 +314,12 @@ int sys_create(char* file_name, int size)
   if(!*file_name)  // empty string check
     return 0;
   lock_acquire(&filesys_lock);
+//  printf("going to create %s\n",file_name);
   ret = filesys_create(file_name, size);
+//  printf("file_Created\n\n");
   lock_release(&filesys_lock);
+
+//  printf("file_Created\n\n");
   return ret;
 }
 
@@ -281,6 +352,7 @@ void sys_close(int fd)
 
 int sys_write(int fd, void *buffer, unsigned size)
 {
+//	printf("now writing to file\n");
   if(fd == STDIN_FILENO)
     return 0;
   else if(fd == STDOUT_FILENO)
@@ -294,6 +366,8 @@ int sys_write(int fd, void *buffer, unsigned size)
     struct file* fi = cur->fd_table[fd];
     if(fi)
     {
+      if(fi->inode->data.isDir)
+       	return -1;
       int ret;
       lock_acquire(&filesys_lock);
       ret = file_write(fi, buffer, size);

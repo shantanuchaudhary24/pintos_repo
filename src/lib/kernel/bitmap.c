@@ -353,10 +353,12 @@ bitmap_read (struct bitmap *b, struct file *file)
 
 /* Writes B to FILE.  Return true if successful, false
    otherwise. */
+//#endif
 bool
 bitmap_write (const struct bitmap *b, struct file *file)
 {
   off_t size = byte_cnt (b->bit_cnt);
+//  printf("bitmap ki sector %d\n",file->inode->data.start);
   return file_write_at (file, b->bits, size, 0) == size;
 }
 #endif /* FILESYS */

@@ -18,4 +18,8 @@ int sys_remove(char* file_name);
 int sys_create(char* file_name, int size);
 void process_terminate(void);
 
+bool sys_mkdir(char*);
+bool sys_chdir(char*);
+bool sys_readdir(int,char*);
+
 #endif /* userprog/syscall.h */

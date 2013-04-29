@@ -198,7 +198,9 @@ struct inode* inode_by_path(char* path, bool parent)
 
 //    printf("dir_lookingup by inode name %s, inode %x,sector %d, data start %d\n",name,ip,ip->sector,ip->data.start);
 //    printf("dir looking up %s-%x, %s\n",path,ip, name);
-       if((next = inode_open(dir_lookup_by_inode(ip, name).inode_sector)) == NULL){
+      if(strcmp(".",name)==0)
+    	  next=ip;
+      else if((next = inode_open(dir_lookup_by_inode(ip, name).inode_sector)) == NULL){
 //       iunlockput(ip);
 //                 printf("3 ip %x\n",ip);
          return 0;
@@ -241,7 +243,7 @@ inode_create (block_sector_t sector, off_t length, bool isDir)
       size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
-      disk_inode->isDir = true;
+      disk_inode->isDir = isDir;
 
       if (free_map_allocate (1, &disk_inode->start))
         {
@@ -279,6 +281,8 @@ inode_create (block_sector_t sector, off_t length, bool isDir)
         } 
       free (disk_inode);
     }
+  if(!success)
+	  printf("inode created failed\n");
   return success;
 }
 
@@ -387,6 +391,8 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   off_t bytes_read = 0;
   uint8_t *bounce = NULL;
 
+//  if(size==0)
+//	  printf("\n\n\n\n\nWHATSS\n");
   while (size > 0) 
     {
       /* Disk sector to read, starting byte offset within sector. */
@@ -411,8 +417,12 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 
       /* Number of bytes to actually copy out of this sector. */
       int chunk_size = size < min_left ? size : min_left;
+//      printf("size: %d, sector left %d\n",size,sector_left);
       if (chunk_size <= 0)
-        break;
+       {
+//    	  printf("breaking here\n");
+    	  break;
+       }
 
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
@@ -428,7 +438,10 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
             {
               bounce = malloc (BLOCK_SECTOR_SIZE);
               if (bounce == NULL)
-                break;
+              {
+            	  printf("wow, malloc failed?!?!\n");
+            	  break;
+              }
             }
 //          read_cache(sector_idx, bounce);
           block_read (fs_device, sector_idx, bounce);
@@ -443,8 +456,9 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       offset += chunk_size;
       bytes_read += chunk_size;
     }
-  //free (bounce);
+  free (bounce);
 
+//  printf("bytes read are %d\n",bytes_read);
   return bytes_read;
 }
 
@@ -519,7 +533,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       offset += chunk_size;
       bytes_written += chunk_size;
     }
-  //free (bounce);
+  free (bounce);
 
   if(inode->data.length<offset+bytes_written)
   {

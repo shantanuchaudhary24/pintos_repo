@@ -39,6 +39,7 @@
 #include "devices/ide.h"
 #include "filesys/filesys.h"
 #include "filesys/fsutil.h"
+#include "filesys/inode.h"
 #endif
 
 /* Page directory with kernel mappings only. */
@@ -143,6 +144,11 @@ main (void)
 
   printf ("Boot complete.\n");
   
+  thread_current()->cwd.inode=inode_open(1);
+  ASSERT(thread_current()->cwd.inode);
+  thread_current()->cwd.inode->data.isDir=true;
+
+  printf("allocation worked\n");
   /* Run actions specified on kernel command line. */
   run_actions (argv);
 
