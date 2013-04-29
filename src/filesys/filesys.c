@@ -136,7 +136,8 @@ bool filesys_create_folder (const char* name, off_t initial_size)
 	  struct dir* dir_new=dir_open(inode_by_path(name,false));
 	  ASSERT(dir);
 	  dir_add(dir,"..",inode->sector);
-	  dir_close(dir);
+//	  dir_close(dir);
+	  free(dir);
   }
   return success;
 }
