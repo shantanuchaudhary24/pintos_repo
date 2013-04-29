@@ -4,14 +4,6 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 
-/* An open file. */
-struct file 
-  {
-    struct inode *inode;        /* File's inode. */
-    off_t pos;                  /* Current position. */
-    bool deny_write;            /* Has file_deny_write() been called? */
-  };
-
 /* Opens a file for the given INODE, of which it takes ownership,
    and returns the new file.  Returns a null pointer if an
    allocation fails or if INODE is null. */
@@ -111,6 +103,7 @@ off_t
 file_write_at (struct file *file, const void *buffer, off_t size,
                off_t file_ofs) 
 {
+//	printf("file write at sector_file %d\n",file->inode->data.start);
   return inode_write_at (file->inode, buffer, size, file_ofs);
 }
 

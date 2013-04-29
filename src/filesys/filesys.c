@@ -26,7 +26,10 @@ filesys_init (bool format)
   free_map_init ();
 
   if (format) 
-    do_format ();
+  {
+//	  printf("FORMATTING\n");
+	  do_format ();
+  }
 
   free_map_open ();
 }
@@ -37,9 +40,25 @@ void
 filesys_done (void) 
 {
   
-	flush_cache();
+	printf("flushing cache om power off.\n");
+//	flush_cache();
 	free_map_close ();
 }
+
+char* filename_from_path(char* path)
+{
+		int i=0,mark=0;
+       for(;i<strlen(path);i++)
+       {
+               if(path[i]=='/')
+                       mark=i+1;
+       }
+
+		printf("filename from path %s is %s\n",path,path+mark);
+
+       return path+mark;
+}
+
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
@@ -49,14 +68,59 @@ bool
 filesys_create (const char *name, off_t initial_size) 
 {
   block_sector_t inode_sector = 0;
-  struct dir *dir = dir_open_root ();
+//  struct dir *dir = dir_open_root ();
+
+  if(strlen(filename_from_path(name))==0||strlen(filename_from_path(name))>14)
+	  return false;
+
+  struct inode* inode=inode_by_path(name,true);
+  struct dir* dir=dir_open(inode);
+//  printf("filesys_create: path: %s, inode: %x, dir: %x, inode-sector %d\n",name,inode,dir,inode->data.start);
+  ASSERT(dir);
+//  printf("inodeaddr %x\n",dir->inode);
+
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
-                  && inode_create (inode_sector, initial_size)
-                  && dir_add (dir, name, inode_sector));
+                  && inode_create (inode_sector, initial_size, false)
+                  && dir_add (dir, filename_from_path(name), inode_sector));
+
+  struct inode* in;
+//  ASSERT(success);
+//  printf("added file %s to inode %x at sector %d\n",filename_from_path(name),dir->inode,inode_sector);
+//  ASSERT(dir_lookup(dir,filename_from_path(name),&in));
+
   if (!success && inode_sector != 0) 
     free_map_release (inode_sector, 1);
-  dir_close (dir);
+//  printf("got here\n");
+
+  //big problem beloWWWWWWW
+//  dir_close (dir);
+  free(dir);
+//  printf("got here11\n");
+
+  return success;
+}
+
+bool filesys_create_folder (const char* name, off_t initial_size)
+{
+  struct inode* inode=inode_by_path(name,true);
+  struct dir* dir=dir_open(inode);
+
+  printf("length of %s is %d\n",name,strlen(name));
+
+  if(strlen(filename_from_path(name))==0||strlen(filename_from_path(name))>14)
+  {
+	  printf("returniing false\n");
+	  return false;
+  }
+
+  block_sector_t inode_sector = 0;
+  bool success = (dir != NULL
+				  && free_map_allocate (1, &inode_sector)
+				  && inode_create (inode_sector, initial_size, true)
+				  && dir_add (dir, filename_from_path(name), inode_sector));
+  if (!success && inode_sector != 0)
+	free_map_release (inode_sector, 1);
 
   return success;
 }
@@ -69,13 +133,18 @@ filesys_create (const char *name, off_t initial_size)
 struct file *
 filesys_open (const char *name)
 {
-  struct dir *dir = dir_open_root ();
-  struct inode *inode = NULL;
+//  struct dir *dir = dir_open_root ();
 
-  if (dir != NULL)
-    dir_lookup (dir, name, &inode);
-  dir_close (dir);
+//	printf("filesys_open, root inode is %x\n",dir->inode);
+  struct inode* inode=inode_by_path(name,false);//true
+//  struct dir* dir=dir_open(inode);
+//  struct inode *inode = NULL;
+//
+//  if (dir != NULL)
+//    dir_lookup (dir, name, &inode);
+//  dir_close (dir);
 
+//  printf("filesys_open found %x\n",inode);
   return file_open (inode);
 }
 
@@ -86,9 +155,9 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-  struct dir *dir = dir_open_root ();
-  bool success = dir != NULL && dir_remove (dir, name);
-  dir_close (dir); 
+//  struct dir *dir = dir_open_root ();
+  bool success = dir_remove (name);
+//  dir_close (dir);
 
   return success;
 }
@@ -99,8 +168,9 @@ do_format (void)
 {
   printf ("Formatting file system...");
   free_map_create ();
+//  printf("this part done\n");
   if (!dir_create (ROOT_DIR_SECTOR, 16))
     PANIC ("root directory creation failed");
   free_map_close ();
-  printf ("done.\n");
+//  printf ("done.\n");
 }

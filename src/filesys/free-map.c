@@ -37,6 +37,7 @@ free_map_allocate (size_t cnt, block_sector_t *sectorp)
     }
   if (sector != BITMAP_ERROR)
     *sectorp = sector;
+  printf("giving away sector %d\n",sector);
   return sector != BITMAP_ERROR;
 }
 
@@ -73,7 +74,7 @@ void
 free_map_create (void) 
 {
   /* Create inode. */
-  if (!inode_create (FREE_MAP_SECTOR, bitmap_file_size (free_map)))
+  if (!inode_create (FREE_MAP_SECTOR, bitmap_file_size (free_map),false))
     PANIC ("free map creation failed");
 
   /* Write bitmap to file. */

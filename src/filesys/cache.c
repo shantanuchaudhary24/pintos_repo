@@ -173,6 +173,7 @@ int evict_cache(void)
 		clock_hand=clock_hand % CACHE_SIZE;
 	}
 	DPRINT_CACHE("evict_cache:CLOCK HAND:%d\n",clock_hand);
+	printf("clock hand %d\n",clock_hand);
 	write_cache_to_disk(clock_hand);
 	return clock_hand;
 }
@@ -184,9 +185,11 @@ void write_cache_to_disk(int index)
 	DPRINT_CACHE("write_cache_to_disk:flag:%d\n",bcache[index].flag);
 	DPRINT_CACHE("write_cache_to_disk:sector:%d\n",bcache[index].sector);
 
+	printf("write_cacheto disk %d\n",bcache[index].sector);
 	block_write(block_get_role(BLOCK_FILESYS),bcache[index].sector,(&bcache[index])->data);
 	lock_acquire(&bcache_lock);
 	free((&bcache[index])->data);
+
 	bcache[index]=null_cache_entry;
 	lock_release(&bcache_lock);
 	DPRINTF_CACHE("write_cache_to_disk:COMPLETE\n");
