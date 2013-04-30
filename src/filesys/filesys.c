@@ -40,8 +40,8 @@ void
 filesys_done (void) 
 {
   
-	printf("flushing cache om power off.\n");
-//	flush_cache();
+//	printf("flushing cache om power off.\n");
+	flush_cache();
 	free_map_close ();
 }
 

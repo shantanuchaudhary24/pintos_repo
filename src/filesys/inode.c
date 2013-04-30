@@ -24,7 +24,8 @@ bytes_to_sectors (off_t size)
 void print_block(block_sector_t sec)
 {
 	  block_sector_t arr[128];
-	  block_read(fs_device,sec,arr);
+	  //block_read(fs_device,sec,arr);
+	  read_cache(sec,arr);
 	  printf("here is the block %d\n",sec);
 	  int i,j;
 	  for(i=0;i<16;i++)
@@ -89,8 +90,8 @@ byte_to_sector (const struct inode_disk *inode, off_t pos, bool create)
 
   block_sector_t arr[128];
   memset(arr,0,128*sizeof(block_sector_t));
-  block_read(fs_device,inode->start,arr);
-
+  //block_read(fs_device,inode->start,arr);
+  read_cache(inode->start,arr);
 //  print_block(inode->start);
 
   if(arr[level1]==0)
@@ -102,10 +103,12 @@ byte_to_sector (const struct inode_disk *inode, off_t pos, bool create)
 	  }
 	  if(!free_map_allocate(1,&arr[level1]))
 			  return -1;
-	  block_write(fs_device,inode->start,arr);
-//	  printf("arr[level1] new is %d\n",arr[level1]);
+	  //block_write(fs_device,inode->start,arr);
+	  write_cache(inode->start,arr);
+	  //printf("arr[level1] new is %d\n",arr[level1]);
 	  static char zero[512];
-	  block_write(fs_device,arr[level1],zero);
+	  //block_write(fs_device,arr[level1],zero);
+	  write_cache(arr[level1],zero);
   }
 
 //  print_block(inode->start);
@@ -113,8 +116,8 @@ byte_to_sector (const struct inode_disk *inode, off_t pos, bool create)
   block_sector_t l1=arr[level1];
 
   memset(arr,0,128*sizeof(block_sector_t));
-  block_read(fs_device,l1,arr);
-
+  //block_read(fs_device,l1,arr);
+  read_cache(l1,arr);
   if(arr[level2]==0)
   {
 		  if(!create)
@@ -125,9 +128,11 @@ byte_to_sector (const struct inode_disk *inode, off_t pos, bool create)
 	  if(!free_map_allocate(1,&arr[level2]))
 		  return -1;
 //	  printf("arr[level2] new is %d\n",arr[level2]);
-	  block_write(fs_device,l1,arr);
+	  //block_write(fs_device,l1,arr);
+	  write_cache(l1,arr);
 	  static char zero[512];
-	  block_write(fs_device,arr[level2],zero);
+	  //block_write(fs_device,arr[level2],zero);
+	  write_cache(l1,arr);
   }
 
 //  printf("returning %d\n",arr[level2]);
@@ -264,8 +269,9 @@ inode_create (block_sector_t sector, off_t length, bool isDir)
         {
 //          	write_cache(sector,disk_inode);
 //    	  printf("writing new disk indoe in create to disk, %d\n",sizeof(*disk_inode));
-			block_write (fs_device, sector, disk_inode);
-//			printf("back\n");
+//			block_write (fs_device, sector, disk_inode);
+			write_cache(sector,disk_inode);
+//    	  printf("back\n");
 //          if (sectors > 0)
             {
 //              static block_sector_t sects[BLOCK_SECTOR_SIZE/4];
@@ -277,7 +283,9 @@ inode_create (block_sector_t sector, off_t length, bool isDir)
 //            	  free_map_allocate(1, &sects[i]);
 ////            	  write_cache(disk_inode->start+i, zeros);
 //              	  printf("writing zeroes to new disk_inodes start block\n");
-              	  block_write (fs_device, disk_inode->start, zero);
+
+              //  block_write (fs_device, disk_inode->start, zero);
+              	  write_cache(disk_inode->start, zero);
 //              }
 //              block_write(fs_device, disk_inode->start, sects);
 //              for (i = 0; i < sectors; i++) {
@@ -296,8 +304,6 @@ inode_create (block_sector_t sector, off_t length, bool isDir)
         } 
       free (disk_inode);
     }
-  if(!success)
-	  printf("inode created failed\n");
   return success;
 }
 
@@ -339,8 +345,9 @@ inode_open (block_sector_t sector)
   inode->deny_write_cnt = 0;
   inode->removed = false;
 //  read_cache ( inode->sector, &inode->data);
-  block_read (fs_device, inode->sector, &inode->data);
- // printf("returned non null inode.\n");
+//  block_read (fs_device, inode->sector, &inode->data);
+ read_cache( inode->sector, &inode->data);
+  // printf("returned non null inode.\n");
   return inode;
 }
 
@@ -391,7 +398,8 @@ inode_close (struct inode *inode)
 
       else
       {
-    	  block_write(fs_device,inode->sector,&inode->data);
+//    	  block_write(fs_device,inode->sector,&inode->data);
+    	  write_cache(inode->sector,&inode->data);
       }
       free (inode); 
     }
@@ -454,8 +462,8 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           /* Read full sector directly into caller's buffer. */
-//          read_cache(sector_idx, buffer + bytes_read);
-			block_read (fs_device, sector_idx, buffer + bytes_read);
+          read_cache(sector_idx, buffer + bytes_read);
+//			block_read (fs_device, sector_idx, buffer + bytes_read);
         }
       else 
         {
@@ -470,8 +478,8 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
             	  break;
               }
             }
-//          read_cache(sector_idx, bounce);
-          block_read (fs_device, sector_idx, bounce);
+          read_cache(sector_idx, bounce);
+//          block_read (fs_device, sector_idx, bounce);
           memcpy (buffer + bytes_read, bounce + sector_ofs, chunk_size);
 
 //    	  printf("IN THIS HELLHOLE\n");
@@ -529,8 +537,8 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       if (sector_ofs == 0 && chunk_size == BLOCK_SECTOR_SIZE)
         {
           /* Write full sector directly to disk. */
-//          write_cache(sector_idx, buffer + bytes_written);
-          block_write (fs_device, sector_idx, buffer + bytes_written);
+          write_cache(sector_idx, buffer + bytes_written);
+//          block_write (fs_device, sector_idx, buffer + bytes_written);
         }
       else 
         {
@@ -546,13 +554,13 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 //             we're writing, then we need to read in the sector
 //             first.  Otherwise we start with a sector of all zeros. */
           if (sector_ofs > 0 || chunk_size < sector_left)
-//          	read_cache(sector_idx, bounce);
-            block_read (fs_device, sector_idx, bounce);
+          	read_cache(sector_idx, bounce);
+//            block_read (fs_device, sector_idx, bounce);
           else
             memset (bounce, 0, BLOCK_SECTOR_SIZE);
           memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
-//          write_cache(sector_idx, bounce);
-		  block_write (fs_device, sector_idx, bounce);
+          write_cache(sector_idx, bounce);
+//		  block_write (fs_device, sector_idx, bounce);
 //    	  printf("THIS OTHER HOLE\n");
 //        	write_cache_bounce(sector_idx,((void *)buffer) + bytes_written, sector_ofs, chunk_size);
 		
@@ -568,7 +576,8 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
   if(!inode->data.isDir&&inode->data.length<offset+bytes_written)
   {
 	  inode->data.length=offset;
-	  block_write(fs_device,inode->sector,&inode->data);
+//	  block_write(fs_device,inode->sector,&inode->data);
+	  write_cache(inode->sector,&inode->data);
   }
 
   return bytes_written;
