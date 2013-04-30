@@ -105,8 +105,8 @@ filesys_create (const char *name, off_t initial_size)
 //  printf("got here\n");
 
   //big problem beloWWWWWWW
-//  dir_close (dir);
-  free(dir);
+  dir_close (dir);
+//  free(dir);
 //  printf("got here11\n");
 
   return success;
@@ -114,11 +114,6 @@ filesys_create (const char *name, off_t initial_size)
 
 bool filesys_create_folder (const char* name)
 {
-  struct inode* inode=inode_by_path(name,true);
-  if(inode==NULL)
-	  return NULL;
-  struct dir* dir=dir_open(inode);
-
 //  printf("length of %s is %d\n",name,strlen(name));
 
   if(strlen(filename_from_path(name))==0||strlen(filename_from_path(name))>14)
@@ -126,6 +121,11 @@ bool filesys_create_folder (const char* name)
 //	  printf("returniing false\n");
 	  return false;
   }
+
+  struct inode* inode=inode_by_path(name,true);
+  if(inode==NULL)
+	  return NULL;
+  struct dir* dir=dir_open(inode);
 
   block_sector_t inode_sector = 0;
   bool success = (dir != NULL
@@ -138,11 +138,12 @@ bool filesys_create_folder (const char* name)
   if(success)
   {
 	  struct dir* dir_new=dir_open(inode_by_path(name,false));
-	  ASSERT(dir);
+	  ASSERT(dir_new);
 	  dir_add(dir_new,"..",inode->sector);
-//	  dir_close(dir);
-	  free(dir);
+	  dir_close(dir_new);
+//	  free(dir_new);
   }
+  dir_close(dir);
   return success;
 }
 
@@ -179,7 +180,7 @@ filesys_remove (const char *name)
 //  struct dir *dir = dir_open_root ();
   bool success = dir_remove (name);
 //  dir_close (dir);
-
+//  printf("remove status:%d\n",success);
   return success;
 }
 

@@ -150,6 +150,9 @@ malloc (size_t size)
   b = list_entry (list_pop_front (&d->free_list), struct block, free_elem);
   a = block_to_arena (b);
   a->free_cnt--;
+
+//  if(size>500)
+//	  printf("allocated %x\n",b);
   lock_release (&d->lock);
   return b;
 }
@@ -219,6 +222,7 @@ realloc (void *old_block, size_t new_size)
 void
 free (void *p) 
 {
+//	printf("free %x\n",p);
   if (p != NULL)
     {
       struct block *b = p;

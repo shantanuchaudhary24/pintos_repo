@@ -55,6 +55,7 @@ dir_reopen (struct dir *dir)
 void
 dir_close (struct dir *dir) 
 {
+	//printf("Closing directory.\n");
   if (dir != NULL)
     {
       inode_close (dir->inode);
@@ -95,7 +96,7 @@ lookup (const struct dir *dir, const char *name,
           *ep = e;
         if (ofsp != NULL)
           *ofsp = ofs;
-//        printf("returning\n");
+       // printf("returning: found directory\n");
         return true;
       }
   }
@@ -286,7 +287,7 @@ dir_remove (const char *name)
 
   if(inode->data.isDir&&(inode->data.length!=sizeof(struct dir_entry)))
   {
-	  printf("not deleting %d\n",inode->data.length);
+//	  printf("not deleting %d\n",inode->data.length);
 	  goto done;
   }
 
@@ -314,6 +315,7 @@ dir_remove (const char *name)
 
  done:
   inode_close (inode);
+  dir_close(dir);
   return success;
 }
 

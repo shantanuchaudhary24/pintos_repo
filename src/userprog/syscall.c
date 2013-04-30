@@ -253,8 +253,8 @@ int sys_inumber(int fd)
 }
 bool sys_mkdir(char* path)
 {
-	printf("mkdir\n");
-	struct inode* cwd = thread_current()->cwd.inode;
+//	printf("mkdir %s\n",path);
+//	struct inode* cwd = thread_current()->cwd.inode;
 
 //	printf("mkdir: %s\n",path);
 //	int i=0,mark=-1;
@@ -281,6 +281,7 @@ bool sys_mkdir(char* path)
 
 bool sys_readdir(int fd, char* name)
 {
+//	printf("readdir %s\n",name);
   if(fd >= 0 && fd < FDTABLESIZE) // is valid FD?
   {
 	struct thread *t = thread_current ();
@@ -308,11 +309,12 @@ bool sys_readdir(int fd, char* name)
 
 bool sys_chdir(char* path)
 {
-	printf("chdir\n");
+//	printf("chdir, %s\n",path);
 	struct inode* node=inode_by_path(path,false);
 	if(node==0)
 		return false;
 
+	inode_close(thread_current()->cwd.inode);
 	thread_current()->cwd.inode=node;
 	return true;
 }
@@ -346,7 +348,7 @@ int sys_exec(char* filename)
 
 int sys_open(char* file_name)
 {
-//	printf("now opening file\n");
+//	printf("now opening file %s\n",file_name);
   if(!*file_name)  // empty string check
     return -1;
   struct thread *t = thread_current ();
@@ -397,6 +399,7 @@ int sys_remove(char* file_name)
 
 void sys_close(int fd)
 {
+//	printf("sys closing\n");
   if(fd >= 0 && fd < FDTABLESIZE) // is valid FD?
   {
     struct thread *t = thread_current ();
@@ -441,7 +444,7 @@ int sys_write(int fd, void *buffer, unsigned size)
 
 int sys_read(int fd, void* buffer, unsigned size)
 {
-  //printf("In sys_read\n");
+//  printf("In sys_read\n");
   if(fd == STDOUT_FILENO)
     return 0;
   else if(fd == STDIN_FILENO)

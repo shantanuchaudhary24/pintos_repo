@@ -100,7 +100,8 @@ byte_to_sector (const struct inode_disk *inode, off_t pos, bool create)
 //		  printf("poooooops\n");
 		  return -1;
 	  }
-	  ASSERT(free_map_allocate(1,&arr[level1]));
+	  if(!free_map_allocate(1,&arr[level1]))
+			  return -1;
 	  block_write(fs_device,inode->start,arr);
 //	  printf("arr[level1] new is %d\n",arr[level1]);
 	  static char zero[512];
@@ -121,7 +122,8 @@ byte_to_sector (const struct inode_disk *inode, off_t pos, bool create)
 //			  printf("oooooops\n");
 			  return -1;
 		  }
-	  ASSERT(free_map_allocate(1,&arr[level2]));
+	  if(!free_map_allocate(1,&arr[level2]))
+		  return -1;
 //	  printf("arr[level2] new is %d\n",arr[level2]);
 	  block_write(fs_device,l1,arr);
 	  static char zero[512];
@@ -185,6 +187,8 @@ struct inode* inode_by_path(char* path, bool parent)
 	  ip = thread_current()->cwd.inode;
 	  if(ip==NULL)
 		  return NULL;
+	  ip->open_cnt++;
+
 //	  printf("inode for cwd when searching for inode %x\n",ip);
   }
 
@@ -206,7 +210,10 @@ struct inode* inode_by_path(char* path, bool parent)
 //    printf("dir_lookingup by inode name %s, inode %x,sector %d, data start %d\n",name,ip,ip->sector,ip->data.start);
 //    printf("dir looking up %s-%x, %s\n",path,ip, name);
       if(strcmp(".",name)==0)
+      {
     	  next=ip;
+    	  next->open_cnt++;
+      }
       else if((next = inode_open(dir_lookup_by_inode(ip, name).inode_sector)) == NULL){
 //       iunlockput(ip);
 //                 printf("3 ip %x\n",ip);
@@ -215,6 +222,7 @@ struct inode* inode_by_path(char* path, bool parent)
 //       printf("found this %x\n",next);
        ASSERT(next->sector!=-1);
 //     iunlockput(ip);
+       ip->open_cnt--;
        ip = next;
   }
 //  if(nameiparent){
@@ -318,7 +326,9 @@ inode_open (block_sector_t sector)
     }
 
   /* Allocate memory. */
+
   inode = malloc (sizeof *inode);
+//  printf("inode open ka malloc %x\n",inode);
   if (inode == NULL)
     return NULL;
 
@@ -330,6 +340,7 @@ inode_open (block_sector_t sector)
   inode->removed = false;
 //  read_cache ( inode->sector, &inode->data);
   block_read (fs_device, inode->sector, &inode->data);
+ // printf("returned non null inode.\n");
   return inode;
 }
 
@@ -360,16 +371,19 @@ inode_close (struct inode *inode)
     return;
 
 //	printf("INODE BEING REMOVED\nINODE BEING REMOVED\nINODE BEING REMOVED\nINODE BEING REMOVED\n");
-//	printf("inode %x\n",inode);
+	//printf("closing inode %x\n",inode);
   /* Release resources if this was the last opener. */
   if (--inode->open_cnt == 0)
     {
+//	  printf("inode closing %x\n",inode);
       /* Remove from inode list and release lock. */
+	 //printf("release resource blocks.\n");
       list_remove (&inode->elem);
  
       /* Deallocate blocks if removed. */
       if (inode->removed) 
         {
+			//printf("deallocating blocks.\n");
           free_map_release (inode->sector, 1);
           free_map_release (inode->data.start,
                             bytes_to_sectors (inode->data.length)); 
@@ -494,6 +508,8 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 //		printf("entered inode_write, secotr %d, disk_sector %d\n",inode->sector, inode->data.start);
       block_sector_t sector_idx = byte_to_sector (&inode->data, offset,true);
 //      printf("requested sector, got %d\n",sector_idx);
+      if(sector_idx==-1)
+    	  return bytes_written;
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
