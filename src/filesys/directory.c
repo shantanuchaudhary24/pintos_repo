@@ -247,7 +247,7 @@ bool success = false;
 	  {
 		  dir->inode->data.length=ofs+sizeof e;
 //		  printf("new size %d after making %s in %x\n",ofs+sizeof e,name,dir->inode);
-		  block_write(fs_device,dir->inode->sector,&dir->inode->data);
+//		  block_write(fs_device,dir->inode->sector,&dir->inode->data);
 	  }
   }
 //	printf("exiting dir add %d\n",success);
@@ -283,7 +283,7 @@ dir_remove (const char *name)
   if (inode == NULL)
     goto done;
 
-  block_read(fs_device,inode->sector,&inode->data);
+//  block_read(fs_device,inode->sector,&inode->data);
 
   if(inode->data.isDir&&(inode->data.length!=sizeof(struct dir_entry)))
   {
@@ -305,12 +305,12 @@ dir_remove (const char *name)
   /* Remove inode. */
   inode_remove (inode);
   success = true;
-  block_read(fs_device,dir->inode->sector,&dir->inode->data);
+//  block_read(fs_device,dir->inode->sector,&dir->inode->data);
 //  printf("size was %d, %x\n",dir->inode->data.length,dir->inode);
   dir->inode->data.length-=sizeof e;
 //  if(dir->inode->data.length==60)
 //	  printf("yo\n");
-  block_write(fs_device,dir->inode->sector,&dir->inode->data);
+//  block_write(fs_device,dir->inode->sector,&dir->inode->data);
 //  printf("size was %d, %x\n",dir->inode->data.length,dir->inode);
 
  done:

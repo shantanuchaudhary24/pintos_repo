@@ -389,6 +389,10 @@ inode_close (struct inode *inode)
                             bytes_to_sectors (inode->data.length)); 
         }
 
+      else
+      {
+    	  block_write(fs_device,inode->sector,&inode->data);
+      }
       free (inode); 
     }
 }
