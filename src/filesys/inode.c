@@ -469,7 +469,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
         {
           /* Read sector into bounce buffer, then partially copy
              into caller's buffer. */
-          if (bounce == NULL) 
+          /*if (bounce == NULL)
             {
               bounce = malloc (BLOCK_SECTOR_SIZE);
               if (bounce == NULL)
@@ -478,12 +478,12 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
             	  break;
               }
             }
-          read_cache(sector_idx, bounce);
+//          read_cache(sector_idx, bounce);
 //          block_read (fs_device, sector_idx, bounce);
-          memcpy (buffer + bytes_read, bounce + sector_ofs, chunk_size);
-
+//          memcpy (buffer + bytes_read, bounce + sector_ofs, chunk_size);
+*/
 //    	  printf("IN THIS HELLHOLE\n");
-//			read_cache_bounce(sector_idx, buffer + bytes_read, sector_ofs, chunk_size);
+			read_cache_bounce(sector_idx, buffer + bytes_read, sector_ofs, chunk_size);
 		}
       
       /* Advance. */
@@ -491,7 +491,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       offset += chunk_size;
       bytes_read += chunk_size;
     }
-  free (bounce);
+  //free (bounce);
 
 //  printf("bytes read are %d\n",bytes_read);
 //  printf("returned\n");
@@ -543,7 +543,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       else 
         {
           // We need a bounce buffer.
-          if (bounce == NULL) 
+    /*      if (bounce == NULL)
             {
               bounce = malloc (BLOCK_SECTOR_SIZE);
               if (bounce == NULL)
@@ -553,16 +553,16 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 //           If the sector contains data before or after the chunk
 //             we're writing, then we need to read in the sector
 //             first.  Otherwise we start with a sector of all zeros. */
-          if (sector_ofs > 0 || chunk_size < sector_left)
-          	read_cache(sector_idx, bounce);
+//          if (sector_ofs > 0 || chunk_size < sector_left)
+//          	read_cache(sector_idx, bounce);
 //            block_read (fs_device, sector_idx, bounce);
-          else
-            memset (bounce, 0, BLOCK_SECTOR_SIZE);
-          memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
-          write_cache(sector_idx, bounce);
+//          else
+//            memset (bounce, 0, BLOCK_SECTOR_SIZE);
+//          memcpy (bounce + sector_ofs, buffer + bytes_written, chunk_size);
+//          write_cache(sector_idx, bounce);
 //		  block_write (fs_device, sector_idx, bounce);
 //    	  printf("THIS OTHER HOLE\n");
-//        	write_cache_bounce(sector_idx,((void *)buffer) + bytes_written, sector_ofs, chunk_size);
+        write_cache_bounce(sector_idx,((void *)buffer) + bytes_written, sector_ofs, chunk_size);
 		
 		}
 
@@ -571,7 +571,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       offset += chunk_size;
       bytes_written += chunk_size;
     }
-  free (bounce);
+ // free (bounce);
 
   if(!inode->data.isDir&&inode->data.length<offset+bytes_written)
   {
