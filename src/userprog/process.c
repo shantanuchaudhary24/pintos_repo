@@ -125,10 +125,10 @@ start_process (void *file_name_)
   }
 
   // make the program file read only, as long as it is running
-  lock_acquire(&filesys_lock);
+//  lock_acquire(&filesys_lock);
   thread_current()->fi = filesys_open(file_name);
   file_deny_write(thread_current()->fi);
-  lock_release(&filesys_lock);
+//  lock_release(&filesys_lock);
 
   // arguments processing
   unsigned argc = 0;
@@ -255,9 +255,9 @@ process_exit (void)
     }
 
   // this will make the file writable again
-  lock_acquire(&filesys_lock);
+//  lock_acquire(&filesys_lock);
   file_close(thread_current()->fi);
-  lock_release(&filesys_lock);
+//  lock_release(&filesys_lock);
 
   // freeup fd table
   int i = 2; // we start with 2 as 0 and 1 are reserved for STDIN and STDOUT
@@ -265,9 +265,9 @@ process_exit (void)
   {
     if(cur->fd_table[i]) // check if file ptr exist, then close
     {
-      lock_acquire(&filesys_lock);
+//      lock_acquire(&filesys_lock);
       file_close(cur->fd_table[i]);
-      lock_release(&filesys_lock);
+//      lock_release(&filesys_lock);
     }
   }
 }
@@ -378,7 +378,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* Open executable file. */
-  lock_acquire(&filesys_lock);
+//  lock_acquire(&filesys_lock);
   file = filesys_open (file_name);
   if (file == NULL) 
     {
@@ -469,7 +469,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   done:
   /* We arrive here whether the load is successful or not. */
   file_close (file);
-  lock_release(&filesys_lock);
+//  lock_release(&filesys_lock);
   return success;
 }
 

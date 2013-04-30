@@ -226,9 +226,9 @@ bool sys_isdir(int fd)
 		struct file* fi = t->fd_table[fd];
 		if(fi)
 		{
-		  lock_acquire(&filesys_lock);
+//		  lock_acquire(&filesys_lock);
 		  bool ret=fi->inode->data.isDir;
-		  lock_release(&filesys_lock);
+//		  lock_release(&filesys_lock);
 		  return ret;
 		}
 	  }
@@ -242,9 +242,9 @@ int sys_inumber(int fd)
 		struct file* fi = t->fd_table[fd];
 		if(fi)
 		{
-		  lock_acquire(&filesys_lock);
+//		  lock_acquire(&filesys_lock);
 		  int ret=fi->inode->sector;
-		  lock_release(&filesys_lock);
+//		  lock_release(&filesys_lock);
 		  return ret;
 		}
 	  }
@@ -290,7 +290,7 @@ bool sys_readdir(int fd, char* name)
 	{
 //	  if(!fi->inode->isDir)
 //		  return false;
-	  lock_acquire(&filesys_lock);
+//	  lock_acquire(&filesys_lock);
 
 	  struct dir* dir=dir_open(fi->inode);
 	  dir->pos=fi->pos;
@@ -300,7 +300,7 @@ bool sys_readdir(int fd, char* name)
 	  fi->pos=dir->pos;
 	  free(dir);
 
-	  lock_release(&filesys_lock);
+//	  lock_release(&filesys_lock);
 
 	  return ret;
 	}
@@ -357,11 +357,11 @@ int sys_open(char* file_name)
   {
     if(!t->fd_table[i])
     {
-      lock_acquire(&filesys_lock);
+//      lock_acquire(&filesys_lock);
       struct file* fi = filesys_open(file_name);
       if(fi)
         t->fd_table[i] = fi;
-      lock_release(&filesys_lock);
+//      lock_release(&filesys_lock);
       if(fi)
         return i;
       else
@@ -376,11 +376,11 @@ int sys_create(char* file_name, int size)
   int ret;
   if(!*file_name)  // empty string check
     return 0;
-  lock_acquire(&filesys_lock);
+//  lock_acquire(&filesys_lock);
 //  printf("going to create %s\n",file_name);
   ret = filesys_create(file_name, size);
 //  printf("file_Created\n\n");
-  lock_release(&filesys_lock);
+//  lock_release(&filesys_lock);
 
 //  printf("file_Created\n\n");
   return ret;
@@ -391,9 +391,9 @@ int sys_remove(char* file_name)
   int ret;
   if(!*file_name)  // empty string check
     return 0;
-  lock_acquire(&filesys_lock);
+//  lock_acquire(&filesys_lock);
   ret = filesys_remove(file_name);
-  lock_release(&filesys_lock);
+//  lock_release(&filesys_lock);
   return ret;
 }
 
@@ -406,9 +406,9 @@ void sys_close(int fd)
     struct file* fi = t->fd_table[fd];
     if(fi)
     {
-      lock_acquire(&filesys_lock);
+//      lock_acquire(&filesys_lock);
       file_close(fi);
-      lock_release(&filesys_lock);
+//      lock_release(&filesys_lock);
       t->fd_table[fd] = 0;
     }
   }
@@ -433,9 +433,9 @@ int sys_write(int fd, void *buffer, unsigned size)
       if(fi->inode->data.isDir)
        	return -1;
       int ret;
-      lock_acquire(&filesys_lock);
+//      lock_acquire(&filesys_lock);
       ret = file_write(fi, buffer, size);
-      lock_release(&filesys_lock);
+//      lock_release(&filesys_lock);
       return ret;
     }
   }
@@ -462,9 +462,9 @@ int sys_read(int fd, void* buffer, unsigned size)
     if(fi)
     {
       int ret;
-      lock_acquire(&filesys_lock);
+//      lock_acquire(&filesys_lock);
       ret = file_read(fi, buffer, size);
-      lock_release(&filesys_lock);
+//      lock_release(&filesys_lock);
       return ret;
     }
   }
@@ -480,9 +480,9 @@ int sys_filesize(int fd)
     if(fi)
     {
       int ret;
-      lock_acquire(&filesys_lock);
+//      lock_acquire(&filesys_lock);
       ret = file_length(fi);
-      lock_release(&filesys_lock);
+//      lock_release(&filesys_lock);
       return ret;
     }
   }
@@ -497,9 +497,9 @@ void sys_seek(int fd, unsigned pos)
     struct file* fi = t->fd_table[fd];
     if(fi)
     {
-      lock_acquire(&filesys_lock);
+//      lock_acquire(&filesys_lock);
       file_seek(fi, pos);
-      lock_release(&filesys_lock);
+//      lock_release(&filesys_lock);
     }
   }
 }
@@ -513,9 +513,9 @@ unsigned sys_tell(int fd)
     if(fi)
     {
       unsigned ret;
-      lock_acquire(&filesys_lock);
+//      lock_acquire(&filesys_lock);
       ret = file_tell(fi);
-      lock_release(&filesys_lock);
+//      lock_release(&filesys_lock);
       return ret;
     }
   }
