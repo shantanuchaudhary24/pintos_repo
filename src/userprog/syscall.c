@@ -166,18 +166,30 @@ static void syscall_handler (struct intr_frame *f)
       		return;
       	}
 
-//      case SYS_READDIR:
-//      {
-//    	  return sys_readdir((int)get_valid_val(arg+1),(char*)get_valid_val(arg+2));
-//      }
-        /*
+      case SYS_READDIR:
+      {
+    	  f->eax=sys_readdir((int)get_valid_val(arg+1),(char*)get_valid_val(arg+2));
+    	  return;
+      }
+
+      case SYS_INUMBER:
+      {
+    	  f->eax=sys_inumber((int)get_valid_val(arg+1));
+    	  return;
+      }
+      case SYS_ISDIR:
+      {
+    	  f->eax=sys_isdir((int)get_valid_val(arg+1));
+    	  return;
+      }
+
+      /*
       case SYS_MMAP:
       case SYS_MUNMAP:
       case SYS_CHDIR:
       case SYS_MKDIR:
       case SYS_READDIR:
       case SYS_ISDIR:
-      case SYS_INUMBER:
       */
       default:
         thread_exit();
@@ -206,8 +218,42 @@ void process_terminate(void)
   thread_exit();
 }
 
+bool sys_isdir(int fd)
+{
+	  if(fd >= 0 && fd < FDTABLESIZE) // is valid FD?
+	  {
+		struct thread *t = thread_current ();
+		struct file* fi = t->fd_table[fd];
+		if(fi)
+		{
+		  lock_acquire(&filesys_lock);
+		  bool ret=fi->inode->data.isDir;
+		  lock_release(&filesys_lock);
+		  return ret;
+		}
+	  }
+}
+
+int sys_inumber(int fd)
+{
+	  if(fd >= 0 && fd < FDTABLESIZE) // is valid FD?
+	  {
+		struct thread *t = thread_current ();
+		struct file* fi = t->fd_table[fd];
+		if(fi)
+		{
+		  lock_acquire(&filesys_lock);
+		  int ret=fi->inode->sector;
+		  lock_release(&filesys_lock);
+		  return ret;
+		}
+	  }
+
+	  return -1;
+}
 bool sys_mkdir(char* path)
 {
+	printf("mkdir\n");
 	struct inode* cwd = thread_current()->cwd.inode;
 
 //	printf("mkdir: %s\n",path);
@@ -233,25 +279,36 @@ bool sys_mkdir(char* path)
 	return ret;
 }
 
-//bool sys_readdir(int fd, char* name)
-//{
-//  if(fd >= 0 && fd < FDTABLESIZE) // is valid FD?
-//  {
-//	struct thread *t = thread_current ();
-//	struct file* fi = t->fd_table[fd];
-//	if(fi)
-//	{
-////	  if(!fi->inode->isDir)
-////		  return false;
-//	  lock_acquire(&filesys_lock);
-//	  dir_open(fi)
-//	  lock_release(&filesys_lock);
-//	}
-//  }
-//}
+bool sys_readdir(int fd, char* name)
+{
+  if(fd >= 0 && fd < FDTABLESIZE) // is valid FD?
+  {
+	struct thread *t = thread_current ();
+	struct file* fi = t->fd_table[fd];
+	if(fi)
+	{
+//	  if(!fi->inode->isDir)
+//		  return false;
+	  lock_acquire(&filesys_lock);
+
+	  struct dir* dir=dir_open(fi->inode);
+	  dir->pos=fi->pos;
+
+	  bool ret=dir_readdir(dir,name);
+
+	  fi->pos=dir->pos;
+	  free(dir);
+
+	  lock_release(&filesys_lock);
+
+	  return ret;
+	}
+  }
+}
 
 bool sys_chdir(char* path)
 {
+	printf("chdir\n");
 	struct inode* node=inode_by_path(path,false);
 	if(node==0)
 		return false;

@@ -5,6 +5,7 @@
 #include <list.h>
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/thread.h"
 
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
@@ -237,6 +238,7 @@ bool success = false;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
 //  printf("inode write %x, ofd %d\n",dir->inode,ofs);
+//  printf("inode write hee\n");
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
   if(success)
   {
@@ -281,23 +283,34 @@ dir_remove (const char *name)
     goto done;
 
   block_read(fs_device,inode->sector,&inode->data);
-//	  dir->inode->data.length-=sizeof e;
-//  printf("after delete size is %d\n",dir->inode->data.length);
 
-  if(inode->data.length!=sizeof(struct dir_entry))
+  if(inode->data.isDir&&(inode->data.length!=sizeof(struct dir_entry)))
   {
-//	  printf("not deleting %d\n",inode->data.length);
+	  printf("not deleting %d\n",inode->data.length);
 	  goto done;
+  }
+
+  if(inode->sector==thread_current()->cwd.inode->sector)
+  {
+	  thread_current()->cwd.inode=NULL;
   }
 
   /* Erase directory entry. */
   e.in_use = false;
+//  printf("and here\n");
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
     goto done;
 
   /* Remove inode. */
   inode_remove (inode);
   success = true;
+  block_read(fs_device,dir->inode->sector,&dir->inode->data);
+//  printf("size was %d, %x\n",dir->inode->data.length,dir->inode);
+  dir->inode->data.length-=sizeof e;
+//  if(dir->inode->data.length==60)
+//	  printf("yo\n");
+  block_write(fs_device,dir->inode->sector,&dir->inode->data);
+//  printf("size was %d, %x\n",dir->inode->data.length,dir->inode);
 
  done:
   inode_close (inode);
@@ -315,7 +328,7 @@ dir_readdir (struct dir *dir, char name[NAME_MAX + 1])
   while (inode_read_at (dir->inode, &e, sizeof e, dir->pos) == sizeof e) 
     {
       dir->pos += sizeof e;
-      if (e.in_use)
+      if (e.in_use&&!strcmp("..",e.name)==0)
         {
           strlcpy (name, e.name, NAME_MAX + 1);
           return true;

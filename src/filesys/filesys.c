@@ -79,6 +79,8 @@ filesys_create (const char *name, off_t initial_size)
 //  printf("was here\n");
 
   struct inode* inode=inode_by_path(name,true);
+  if(inode==NULL)
+	  return false;
   struct dir* dir=dir_open(inode);
 //  printf("filesys_create: path: %s, inode: %x, dir: %x, inode-sector %d\n",name,inode,dir,inode->data.start);
   ASSERT(dir);
@@ -113,6 +115,8 @@ filesys_create (const char *name, off_t initial_size)
 bool filesys_create_folder (const char* name)
 {
   struct inode* inode=inode_by_path(name,true);
+  if(inode==NULL)
+	  return NULL;
   struct dir* dir=dir_open(inode);
 
 //  printf("length of %s is %d\n",name,strlen(name));

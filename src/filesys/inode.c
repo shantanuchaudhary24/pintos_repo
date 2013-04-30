@@ -76,6 +76,11 @@ byte_to_sector (const struct inode_disk *inode, off_t pos, bool create)
       return -1;
   }
 
+//  if(inode->isDir)
+//  {
+//	  return inode->start;
+//  }
+
   int sector_number = (int) (pos / BLOCK_SECTOR_SIZE);
   int level1 = (int) (sector_number / 128);
   int level2 = (int) (sector_number % 128);
@@ -178,6 +183,8 @@ struct inode* inode_by_path(char* path, bool parent)
   {
 //	  printf("here in inode_by_path\n");
 	  ip = thread_current()->cwd.inode;
+	  if(ip==NULL)
+		  return NULL;
 //	  printf("inode for cwd when searching for inode %x\n",ip);
   }
 
@@ -538,7 +545,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
     }
   free (bounce);
 
-  if(inode->data.length<offset+bytes_written)
+  if(!inode->data.isDir&&inode->data.length<offset+bytes_written)
   {
 	  inode->data.length=offset;
 	  block_write(fs_device,inode->sector,&inode->data);

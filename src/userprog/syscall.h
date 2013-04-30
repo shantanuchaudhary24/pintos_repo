@@ -21,5 +21,7 @@ void process_terminate(void);
 bool sys_mkdir(char*);
 bool sys_chdir(char*);
 bool sys_readdir(int,char*);
+bool sys_isdir(int);
+int sys_inumber(int);
 
 #endif /* userprog/syscall.h */
