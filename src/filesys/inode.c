@@ -397,17 +397,19 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
     {
       /* Disk sector to read, starting byte offset within sector. */
       block_sector_t sector_idx = byte_to_sector (&inode->data, offset,false);
-//      printf("in read, byte to sector gives me %d, start sector is %d\n", sector_idx, inode->data.start);
+      //printf("in read, byte to sector gives me %d, start sector is %d\n", sector_idx, inode->data.start);
       if(sector_idx==-1)
       {
-//    	  printf("returning from read with -1 for sector %d, offset %d\n",inode->data.start,offset);
+    	  //printf("returning from read with -1 for sector %d, offset %d\n",inode->data.start,offset);
     	  if(inode->data.length>=offset+size)
     	  {
     		  memset(buffer_,0,size);
     		  return bytes_read+size;
     	  }
+		  //printf("yahaan se return kar\n");
     	  return 0;
       }
+	  //printf("Iske aage nahi jaunga\n");
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
       /* Bytes left in inode, bytes left in sector, lesser of the two. */
@@ -459,6 +461,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   free (bounce);
 
 //  printf("bytes read are %d\n",bytes_read);
+//  printf("returned\n");
   return bytes_read;
 }
 

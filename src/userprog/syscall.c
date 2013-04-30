@@ -384,6 +384,7 @@ int sys_write(int fd, void *buffer, unsigned size)
 
 int sys_read(int fd, void* buffer, unsigned size)
 {
+  //printf("In sys_read\n");
   if(fd == STDOUT_FILENO)
     return 0;
   else if(fd == STDIN_FILENO)
