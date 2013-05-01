@@ -98,7 +98,6 @@ void read_ahead_thread_func(void *aux UNUSED)
 	{
 		read_ahead_sectors();
 		thread_yield();
-//		printf("spinning\n");
 	}
 }
 
