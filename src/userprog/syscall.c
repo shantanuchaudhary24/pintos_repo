@@ -156,7 +156,6 @@ static void syscall_handler (struct intr_frame *f)
         return;
       case SYS_MKDIR:
       	{
-      		string_check_terminate((char*)(arg+1));
       		f->eax = sys_mkdir((char*)get_valid_val(arg+1));
       		return;
       	}
