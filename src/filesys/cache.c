@@ -22,12 +22,18 @@ static int clock_hand;
 /* Lock for access to bcache array*/
 struct lock bcache_lock;
 
+/*Lock for read_ahead_sectors list*/
+struct lock read_ahead_lock;
+
+/*Read ahead sectors list*/
+struct list read_ahead_sectors_list;
+
 /* For periodic flushing of cache*/
 int time;
 
 /* Function Declarations*/
 void bcache_init(void);
-void read_ahead_thread(block_sector_t sector);
+void add_read_ahead_sectors(block_sector_t sector);
 void read_cache(block_sector_t sector, void *buffer);
 void write_cache(block_sector_t sector,const void *buffer);
 void read_cache_bounce(block_sector_t sector,void *buffer, int ofs, int chunk_size);
@@ -40,8 +46,8 @@ static void write_cache_to_disk(int index);
 static int find_cache_entry(block_sector_t sector);
 static int index_for_insertion(void);
 static void write_back_func(void *aux UNUSED);
-static void read_ahead_func(void *aux);
-
+static void read_ahead_thread_func(void *aux UNUSED);
+static void read_ahead_sectors();
 
 /* Initialise the buffer cache pre-requisites
  * Initialises the bcache_lock and nulls out the
@@ -52,7 +58,12 @@ static void read_ahead_func(void *aux);
 void bcache_init(void)
 {
 	int index;
+	struct list_elem *e;
+
 	lock_init(&bcache_lock);
+	lock_init(&read_ahead_lock);
+	list_init(&read_ahead_sectors_list);
+
 	clock_hand= MARK_EMPTY;
 	null_cache_entry.flag=MARK_EMPTY;
 	null_cache_entry.accessed=MARK_EMPTY;
@@ -61,6 +72,7 @@ void bcache_init(void)
 	for(index=0;index<CACHE_SIZE;index++)
 		bcache[index]=null_cache_entry;
 	thread_create("filesys_cache_write_behind",0, write_back_func,NULL);
+	thread_create("filesys_cache_read_ahead",0,read_ahead_thread_func, NULL);
 	DPRINTF_CACHE("bcache_init:CACHE INITIALIZED\n");	
 }
 
@@ -80,25 +92,42 @@ void write_back_func(void *aux UNUSED)
 /* Function for creating a thread for reading
  * blocks to the buffer cache in advance.
  * */
-void read_ahead_thread(block_sector_t sector)
+void read_ahead_thread_func(void *aux UNUSED)
 {
-	block_sector_t *temp = malloc(sizeof(block_sector_t));
-	if(temp!=NULL)
+	while(true)
 	{
-		*temp=sector+1;
-		thread_create("filesys_cache_read_ahead",0,read_ahead_func, temp);
+		read_ahead_sectors();
+		thread_yield();
+//		printf("spinning\n");
 	}
 }
 
-/* Function used by filesys_cache_read_ahead thread
- * to read the block into the cache in advance.
- * */
-void read_ahead_func(void *aux)
+void read_ahead_sectors()
 {
-	block_sector_t sector= *(block_sector_t *)aux;
-	insert_cache_read(sector);
-	free(aux);
+	struct list_elem *e;
+	struct node *temp;
+	void *temp_buffer=malloc(BLOCK_SECTOR_SIZE);
+	while (!list_empty (&read_ahead_sectors_list))
+	{
+		lock_acquire(&read_ahead_lock);
+		e=list_pop_front(&read_ahead_sectors_list);
+		temp=list_entry(e,struct node,list_element);
+		read_cache(temp->sector,temp_buffer);
+		free(e);
+		lock_release(&read_ahead_lock);
+	}
 }
+
+void add_read_ahead_sectors(block_sector_t sector)
+{
+	printf("-----------------kamaal ho gaya\n");
+	struct node *temp=malloc(sizeof(struct node));
+	temp->sector=sector;
+	lock_acquire(&read_ahead_lock);
+	list_push_back(&read_ahead_sectors_list,&temp->list_element);
+	lock_release(&read_ahead_lock);
+}
+
 
 /* Function for reading the entries from buffer cache
  * into the buffer. It takes a sector as input, finds

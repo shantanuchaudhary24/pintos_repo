@@ -2,6 +2,7 @@
 /*Structure of cache and working functions*/
 #include <stdio.h>
 #include <devices/block.h>
+#include <lib/kernel/list.h>
 
 #define CACHE_SIZE 	 64
 #define BUFFER_VALID 1
@@ -11,7 +12,7 @@
 
 /* Function Declaration*/
 void bcache_init(void);
-void read_ahead_thread(block_sector_t sector);
+void add_read_ahead_sectors(block_sector_t sector);
 void read_cache(block_sector_t sector, void *buffer);
 void write_cache(block_sector_t sector,const void *buffer);
 void read_cache_bounce(block_sector_t sector,void *buffer, int ofs, int chunk_size);
@@ -26,3 +27,8 @@ typedef struct buf
 	void *data;
 }struct_buf;
 
+struct node
+{
+	struct list_elem list_element;
+	block_sector_t sector;
+};

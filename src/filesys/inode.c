@@ -130,9 +130,9 @@ byte_to_sector (const struct inode_disk *inode, off_t pos, bool create)
 //	  printf("arr[level2] new is %d\n",arr[level2]);
 	  //block_write(fs_device,l1,arr);
 	  write_cache(l1,arr);
-	  static char zero[512];
+//	  static char zero[512];
 	  //block_write(fs_device,arr[level2],zero);
-	  write_cache(l1,arr);
+//	  write_cache(l1,arr);
   }
 
 //  printf("returning %d\n",arr[level2]);
