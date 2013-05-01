@@ -43,8 +43,7 @@ void write_cache(block_sector_t sector,const void *buffer);
 void read_cache_bounce(block_sector_t sector,void *buffer, int ofs, int chunk_size);
 void write_cache_bounce(block_sector_t sector, void *buffer, int ofs, int chunk_size);
 void flush_cache(void);
-static int insert_cache_write(block_sector_t sector);
-static int insert_cache_read(block_sector_t sector);
+static int insert_cache(block_sector_t sector,int type);
 static int evict_cache(void);
 static void write_cache_to_disk(int index);
 static int find_cache_entry(block_sector_t sector);
@@ -148,7 +147,7 @@ void read_cache( block_sector_t sector, void *buffer)
 		memcpy(buffer,(&bcache[index_to_cache])->data, BLOCK_SECTOR_SIZE);
 	else 
 	{
-		index_to_cache=insert_cache_read(sector);
+		index_to_cache=insert_cache(sector,INSERT_READ);
 		memcpy(buffer,(&bcache[index_to_cache])->data,BLOCK_SECTOR_SIZE);
 	}
 }
@@ -172,7 +171,7 @@ void write_cache(block_sector_t sector,const void *buffer)
 	}
 	else 
 	{
-		index_to_cache=insert_cache_write(sector);
+		index_to_cache=insert_cache(sector,INSERT_WRITE);
 		memcpy((&bcache[index_to_cache])->data, buffer,BLOCK_SECTOR_SIZE);
 	}
 }
@@ -200,40 +199,20 @@ void write_cache_bounce(block_sector_t sector, void *buffer, int ofs, int chunk_
 	
 }
 
-/* Function for inserting a write entry into the buffer
- * cache array.It acquires the index at which the
- * sector data is to be inserted and then sets the 
- * variables accordingly and returns that index.
- * */
-int insert_cache_write(block_sector_t sector)
+int insert_cache(block_sector_t sector,int type)
 {
 	int index=index_for_insertion();
 	lock_acquire(&bcache_lock);
 	bcache[index].sector=sector;
 	bcache[index].accessed=1;
-	bcache[index].flag=BUFFER_DIRTY;
+	if(type==INSERT_READ)
+	{
+		bcache[index].flag=BUFFER_VALID;
+		block_read(block_get_role(BLOCK_FILESYS),sector,(&bcache[index])->data);
+	}
+	else bcache[index].flag=BUFFER_DIRTY;
 	lock_release(&bcache_lock);
-	DPRINT_CACHE("insert_cache_write:INSERTED AT:%d\n",index);
-	return index;
-}
-
-/* Function for inserting a read entry into the buffer
- * cache array.It acquires the index at which the
- * sector data is to be inserted and then sets the 
- * variables accordingly and reads the data from disk
- * into the buffer cache entry chosen to be inserted
- * and then it returns the index.
- * */
-int insert_cache_read(block_sector_t sector)
-{
-	int index=index_for_insertion();
-	lock_acquire(&bcache_lock);
-	bcache[index].sector=sector;
-	bcache[index].accessed=1;
-	bcache[index].flag=BUFFER_VALID;
-	block_read(block_get_role(BLOCK_FILESYS),sector,(&bcache[index])->data);
-	lock_release(&bcache_lock);
-	DPRINT_CACHE("insert_cache_read:INSERTED AT\n",index);
+	DPRINT_CACHE("insert_cache:INSERTED AT\n",index);
 	return index;
 }
 

@@ -5,8 +5,10 @@
 #include <lib/kernel/list.h>
 
 #define CACHE_SIZE 	 64
-#define BUFFER_VALID 1
-#define BUFFER_DIRTY 2
+#define BUFFER_VALID 0x1
+#define BUFFER_DIRTY 0x2
+#define INSERT_READ	0
+#define INSERT_WRITE 1
 #define MARK_EMPTY -1
 #define WRITE_BACK_INTERVAL TIMER_FREQ*20
 
