@@ -8,6 +8,7 @@
 #include "threads/synch.h"
 #include "threads/init.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "process.h"
@@ -155,18 +156,20 @@ static void syscall_handler (struct intr_frame *f)
         return;
       case SYS_MKDIR:
       	{
-      		bool ret = sys_mkdir((char*)get_valid_val(arg+1));
-      		f->eax=ret;
+      		string_check_terminate((char*)(arg+1));
+      		f->eax = sys_mkdir((char*)get_valid_val(arg+1));
       		return;
       	}
       case SYS_CHDIR:
       	{
+      		string_check_terminate((char*)(arg+1));
       		f->eax=sys_chdir((char*)get_valid_val(arg+1));
       		return;
       	}
 
       case SYS_READDIR:
       {
+    	  buffer_check_terminate((void*)(arg+2),15);
     	  f->eax=sys_readdir((int)get_valid_val(arg+1),(char*)get_valid_val(arg+2));
     	  return;
       }
@@ -241,8 +244,7 @@ int sys_inumber(int fd)
 }
 bool sys_mkdir(char* path)
 {
-	bool ret=filesys_create_folder(path);
-	return ret;
+	return filesys_create_folder(path);
 }
 
 bool sys_readdir(int fd, char* name)

@@ -4,6 +4,7 @@
 #include <string.h>
 #include <list.h>
 #include "filesys/inode.h"
+#include "filesys/filesys.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
 
@@ -122,7 +123,7 @@ dir_lookup (const struct dir *dir, const char *name,
 }
 
 struct dir_entry
-dir_lookup_by_inode (const struct inode *inode, const char *name)
+dir_lookup_by_inode (struct inode *inode, const char *name)
 {
   struct dir_entry e;
   size_t ofs;

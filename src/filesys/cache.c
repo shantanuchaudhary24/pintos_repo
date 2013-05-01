@@ -9,6 +9,8 @@
 #include "threads/synch.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
+#include "threads/interrupt.h"
+
 
 /* Array for representing buffer cache*/
 struct_buf bcache[CACHE_SIZE];
@@ -50,7 +52,7 @@ static int find_cache_entry(block_sector_t sector);
 static int index_for_insertion(void);
 static void write_back_func(void *aux UNUSED);
 static void read_ahead_thread_func(void *aux UNUSED);
-static void read_ahead_sectors();
+static void read_ahead_sectors(void);
 
 /* Initialise the buffer cache pre-requisites
  * Initialises the bcache_lock and nulls out the
@@ -61,7 +63,6 @@ static void read_ahead_sectors();
 void bcache_init(void)
 {
 	int index;
-	struct list_elem *e;
 
 	lock_init(&bcache_lock);
 	lock_init(&read_ahead_lock);
@@ -100,12 +101,13 @@ void read_ahead_thread_func(void *aux UNUSED)
 	while(true)
 	{
 		read_ahead_sectors();
-		intr_disable();
+		enum intr_level level=intr_disable();
 		thread_block();
+		intr_set_level(level);
 	}
 }
 
-void read_ahead_sectors()
+void read_ahead_sectors(void)
 {
 	struct list_elem *e;
 	struct node *temp;
@@ -124,11 +126,13 @@ void read_ahead_sectors()
 void add_read_ahead_sectors(block_sector_t sector)
 {
 	struct node *temp=malloc(sizeof(struct node));
+	struct thread *t=get_thread_from_tid(read_ahead_thread_id);
 	temp->sector=sector;
 	lock_acquire(&read_ahead_lock);
 	list_push_back(&read_ahead_sectors_list,&temp->list_element);
 	lock_release(&read_ahead_lock);
-	thread_unblock(get_thread_from_tid(read_ahead_thread_id));
+	if(t->status == THREAD_BLOCKED)
+		thread_unblock(t);
 }
 
 

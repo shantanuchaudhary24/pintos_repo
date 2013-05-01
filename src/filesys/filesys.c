@@ -42,14 +42,14 @@ filesys_done (void)
 	free_map_close ();
 }
 
-char* filename_from_path(char* path)
+const char* filename_from_path(const char* path)
 {
 		int i=0,mark=0;
-       for(;i<strlen(path);i++)
+       for(;(unsigned)i<strlen(path);i++)
        {
                if(path[i]=='/')
                {
-            	   if(i+1<strlen(path)&&(path[i+1]!='.'||(i+2<strlen(path)&&path[i+2]=='.'&&path[i+1]=='.')))
+            	   if((unsigned)i+1<strlen(path)&&(path[i+1]!='.'||((unsigned)i+2<strlen(path)&&path[i+2]=='.'&&path[i+1]=='.')))
             			   mark=i+1;
                }
        }
@@ -78,8 +78,6 @@ filesys_create (const char *name, off_t initial_size)
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, false)
                   && dir_add (dir, filename_from_path(name), inode_sector));
-
-  struct inode* in;
 
   if (!success && inode_sector != 0) 
   {

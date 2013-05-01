@@ -40,7 +40,7 @@ struct inode *dir_get_inode (struct dir *);
 
 /* Reading and writing. */
 bool dir_lookup (const struct dir *, const char *name, struct inode **);
-struct dir_entry dir_lookup_by_inode (const struct inode *inode, const char *name);
+struct dir_entry dir_lookup_by_inode (struct inode *inode, const char *name);
 bool dir_add (struct dir *, const char *name, block_sector_t);
 bool dir_remove (const char *name);
 bool dir_readdir (struct dir *, char name[NAME_MAX + 1]);

@@ -21,28 +21,11 @@ bytes_to_sectors (off_t size)
   return DIV_ROUND_UP (size, BLOCK_SECTOR_SIZE);
 }
 
-void print_block(block_sector_t sec)
-{
-	  block_sector_t arr[128];
-	  read_cache(sec,arr);
-	  printf("here is the block %d\n",sec);
-	  int i,j;
-	  for(i=0;i<16;i++)
-	  {
-		  for(j=0;j<8;j++)
-		  {
-			  printf("%d, ",arr[i*8+j]);
-		  }
-		  printf("\n");
-	  }
-
-}
-
 /* Returns the block device sector that contains byte offset POS
    within INODE.
    Returns -1 if INODE does not contain data for a byte at offset
    POS. */
-static block_sector_t
+static int
 byte_to_sector (const struct inode_disk *inode, off_t pos, bool create)
 {
   ASSERT (inode != NULL);
@@ -94,6 +77,8 @@ byte_to_sector (const struct inode_disk *inode, off_t pos, bool create)
 	  if(!free_map_allocate(1,&arr[level2]))
 		  return -1;
 	  write_cache(l1,arr);
+	  static char zero[512];
+	  write_cache(arr[level2],zero);
   }
   return arr[level2];
 }
@@ -109,10 +94,10 @@ inode_init (void)
   list_init (&open_inodes);
 }
 
-static char*
-skipelem(char *path, char *name)
+static const char*
+skipelem(const char *path, char *name)
 {
-  char *s;
+  const char *s;
   int len;
 
   while(*path == '/')
@@ -134,7 +119,7 @@ skipelem(char *path, char *name)
   return path;
 }
 
-struct inode* inode_by_path(char* path, bool parent)
+struct inode* inode_by_path(const char* path, bool parent)
 {
   struct inode *ip, *next;
   char name[15]="";
@@ -164,7 +149,6 @@ struct inode* inode_by_path(char* path, bool parent)
       else if((next = inode_open(dir_lookup_by_inode(ip, name).inode_sector)) == NULL){
          return 0;
        }
-       ASSERT(next->sector!=-1);
        ip->open_cnt--;
        ip = next;
   }
@@ -223,7 +207,6 @@ inode_create (block_sector_t sector, off_t length, bool isDir)
   disk_inode = calloc (1, sizeof *disk_inode);
   if (disk_inode != NULL)
     {
-      size_t sectors = bytes_to_sectors (length);
       disk_inode->length = length;
       disk_inode->magic = INODE_MAGIC;
       disk_inode->isDir = isDir;
@@ -347,12 +330,11 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
 {
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
-  uint8_t *bounce = NULL;
 
   while (size > 0) 
     {
       /* Disk sector to read, starting byte offset within sector. */
-      block_sector_t sector_idx = byte_to_sector (&inode->data, offset,false);
+      int sector_idx = byte_to_sector (&inode->data, offset,false);
       if(sector_idx==-1)
       {
     	  if(inode->data.length>=offset+size)
@@ -399,14 +381,13 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
 {
   const uint8_t *buffer = buffer_;
   off_t bytes_written = 0;
-  uint8_t *bounce = NULL;
 
   if (inode->deny_write_cnt)
     return 0;
 
   while (size > 0) 
     {
-      block_sector_t sector_idx = byte_to_sector (&inode->data, offset,true);
+      int sector_idx = byte_to_sector (&inode->data, offset,true);
       if(sector_idx==-1)
     	  return bytes_written;
       int sector_ofs = offset % BLOCK_SECTOR_SIZE;
