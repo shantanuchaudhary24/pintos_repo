@@ -350,7 +350,7 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
       int sector_idx = byte_to_sector (&inode->data, offset,false);
       if(sector_idx==-1)
       {
-    	  if(inode->data.length>=offset+size)
+    	  if(inode->data.length>=offset)
     	  {
     		  memset(buffer_,0,size);
     		  return bytes_read+size;
