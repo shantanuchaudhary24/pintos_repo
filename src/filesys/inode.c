@@ -331,6 +331,19 @@ inode_read_at (struct inode *inode, void *buffer_, off_t size, off_t offset)
   uint8_t *buffer = buffer_;
   off_t bytes_read = 0;
 
+//  int off=0;
+//  while(off<size)
+//  {
+//	  int sector_idx = byte_to_sector (&inode->data, offset+off,false);
+//	  if(sector_idx==-1)
+//	  {
+//		  off+=BLOCK_SECTOR_SIZE;
+//		  continue;
+//	  }
+//	  add_read_ahead_sectors(sector_idx);
+//	  off+=BLOCK_SECTOR_SIZE;
+//  }
+
   while (size > 0) 
     {
       /* Disk sector to read, starting byte offset within sector. */

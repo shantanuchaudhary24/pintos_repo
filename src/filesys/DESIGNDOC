@@ -32,6 +32,8 @@ Harshal Bidasaria
 >> A2: What is the maximum size of a file supported by your inode
 >> structure?  Show your work.
 
+A file can be as big as the disk has remaining space.
+
 ---- SYNCHRONIZATION ----
 
 >> A3: Explain how your code avoids a race if two processes attempt to
@@ -59,6 +61,8 @@ Harshal Bidasaria
 >> structure, and what advantages and disadvantages does your
 >> structure have, compared to a multilevel index?
 
+We've used multilevel indexing. This facilitates adressing of files as large as the disk itself.
+
 			    SUBDIRECTORIES
 			    ==============
 
@@ -68,10 +72,24 @@ Harshal Bidasaria
 >> `struct' member, global or static variable, `typedef', or
 >> enumeration.  Identify the purpose of each in 25 words or less.
 
+struct inode_disk
+  {
+    block_sector_t start;               /* First data sector. */
+    off_t length;                       /* File size in bytes. */
+    unsigned magic;                     /* Magic number. */
+    bool isDir;
+    uint32_t unused[124];               /* Not used. */
+  };
+
+isDir keeps track of whether the inode is of type dir.
+
 ---- ALGORITHMS ----
 
 >> B2: Describe your code for traversing a user-specified path.  How
 >> do traversals of absolute and relative paths differ?
+
+To traverse a path we use inode_by_path function, which starts from 'cwd' or root depending upon
+whether the adress starts with '/' or not.
 
 ---- SYNCHRONIZATION ----
 
@@ -85,6 +103,7 @@ Harshal Bidasaria
 >> working directory?  If so, what happens to that process's future
 >> file system operations?  If not, how do you prevent it?
 
+Yes, we can remove the current working directory. In future, if we try to create a new file in this directory or open '.' or '..' it will fail.
 ---- RATIONALE ----
 
 >> B6: Explain why you chose to represent the current directory of a
@@ -170,27 +189,3 @@ The corresponding wakeup is done when the sectors are added to the list of read_
 
 >> C7: Describe a file workload likely to benefit from buffer caching,
 >> and workloads likely to benefit from read-ahead and write-behind.
-
-			   SURVEY QUESTIONS
-			   ================
-
-Answering these questions is optional, but it will help us improve the
-course in future quarters.  Feel free to tell us anything you
-want--these questions are just to spur your thoughts.  You may also
-choose to respond anonymously in the course evaluations at the end of
-the quarter.
-
->> In your opinion, was this assignment, or any one of the three problems
->> in it, too easy or too hard?  Did it take too long or too little time?
-
->> Did you find that working on a particular part of the assignment gave
->> you greater insight into some aspect of OS design?
-
->> Is there some particular fact or hint we should give students in
->> future quarters to help them solve the problems?  Conversely, did you
->> find any of our guidance to be misleading?
-
->> Do you have any suggestions for the TAs to more effectively assist
->> students in future quarters?
-
->> Any other comments?
