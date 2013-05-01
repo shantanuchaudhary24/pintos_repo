@@ -31,6 +31,10 @@ struct list read_ahead_sectors_list;
 /* For periodic flushing of cache*/
 int time;
 
+/* TIDs for flushing and read_ahead thread*/
+tid_t read_ahead_thread_id;
+tid_t flush_cache_thread_id;
+
 /* Function Declarations*/
 void bcache_init(void);
 void add_read_ahead_sectors(block_sector_t sector);
@@ -71,8 +75,8 @@ void bcache_init(void)
 	(&null_cache_entry)->data=NULL;
 	for(index=0;index<CACHE_SIZE;index++)
 		bcache[index]=null_cache_entry;
-	thread_create("filesys_cache_write_behind",0, write_back_func,NULL);
-	thread_create("filesys_cache_read_ahead",0,read_ahead_thread_func, NULL);
+	flush_cache_thread_id=thread_create("filesys_cache_write_behind",0, write_back_func,NULL);
+	read_ahead_thread_id=thread_create("filesys_cache_read_ahead",0,read_ahead_thread_func, NULL);
 	DPRINTF_CACHE("bcache_init:CACHE INITIALIZED\n");	
 }
 
@@ -97,7 +101,8 @@ void read_ahead_thread_func(void *aux UNUSED)
 	while(true)
 	{
 		read_ahead_sectors();
-		thread_yield();
+		intr_disable();
+		thread_block();
 	}
 }
 
@@ -119,12 +124,12 @@ void read_ahead_sectors()
 
 void add_read_ahead_sectors(block_sector_t sector)
 {
-	printf("-----------------kamaal ho gaya\n");
 	struct node *temp=malloc(sizeof(struct node));
 	temp->sector=sector;
 	lock_acquire(&read_ahead_lock);
 	list_push_back(&read_ahead_sectors_list,&temp->list_element);
 	lock_release(&read_ahead_lock);
+	thread_unblock(get_thread_from_tid(read_ahead_thread_id));
 }
 
 
@@ -273,7 +278,6 @@ int evict_cache(void)
 		clock_hand=clock_hand % CACHE_SIZE;
 	}
 	DPRINT_CACHE("evict_cache:CLOCK HAND:%d\n",clock_hand);
-//	printf("clock hand %d\n",clock_hand);
 	write_cache_to_disk(clock_hand);
 	return clock_hand;
 }
@@ -288,7 +292,6 @@ void write_cache_to_disk(int index)
 	DPRINT_CACHE("write_cache_to_disk:flag:%d\n",bcache[index].flag);
 	DPRINT_CACHE("write_cache_to_disk:sector:%d\n",bcache[index].sector);
 
-//	printf("write_cacheto disk %d\n",bcache[index].sector);
 	block_write(block_get_role(BLOCK_FILESYS),bcache[index].sector,(&bcache[index])->data);
 	lock_acquire(&bcache_lock);
 	free((&bcache[index])->data);
