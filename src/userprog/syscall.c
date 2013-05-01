@@ -1,6 +1,7 @@
 #include "userprog/syscall.h"
 //14406
 #include <stdio.h>
+#include <stdlib.h>
 #include "lib/stdio.h"
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
@@ -14,7 +15,6 @@
 #include "devices/input.h"
 #include "userprog/debug.h"
 
-extern struct lock filesys_lock;
 
 static void syscall_handler (struct intr_frame *);
 static int get_valid_val(int *uaddr);
@@ -156,7 +156,6 @@ static void syscall_handler (struct intr_frame *f)
       case SYS_MKDIR:
       	{
       		bool ret = sys_mkdir((char*)get_valid_val(arg+1));
-//      		printf("\n\n\ndid come here %d\n",ret);
       		f->eax=ret;
       		return;
       	}
@@ -183,14 +182,6 @@ static void syscall_handler (struct intr_frame *f)
     	  return;
       }
 
-      /*
-      case SYS_MMAP:
-      case SYS_MUNMAP:
-      case SYS_CHDIR:
-      case SYS_MKDIR:
-      case SYS_READDIR:
-      case SYS_ISDIR:
-      */
       default:
         thread_exit();
         break;
@@ -226,12 +217,11 @@ bool sys_isdir(int fd)
 		struct file* fi = t->fd_table[fd];
 		if(fi)
 		{
-//		  lock_acquire(&filesys_lock);
 		  bool ret=fi->inode->data.isDir;
-//		  lock_release(&filesys_lock);
 		  return ret;
 		}
 	  }
+	  return false;
 }
 
 int sys_inumber(int fd)
@@ -242,9 +232,7 @@ int sys_inumber(int fd)
 		struct file* fi = t->fd_table[fd];
 		if(fi)
 		{
-//		  lock_acquire(&filesys_lock);
 		  int ret=fi->inode->sector;
-//		  lock_release(&filesys_lock);
 		  return ret;
 		}
 	  }
@@ -253,44 +241,18 @@ int sys_inumber(int fd)
 }
 bool sys_mkdir(char* path)
 {
-//	printf("mkdir %s\n",path);
-//	struct inode* cwd = thread_current()->cwd.inode;
-
-//	printf("mkdir: %s\n",path);
-//	int i=0,mark=-1;
-//	for(;i<strlen(path);i++)
-//	{
-//		if(path[i]=='/')
-//			mark=i;
-//	}
-
-//	if(mark>-1)
-//	{
-////		printf("the name is %s\n",path[mark+1]);
-//		path[mark]=0;
-//		struct inode* inode=inode_by_path(path,false);
-//		struct dir* dir=dir_open(inode);
-//		return filesys_create_folder(dir,filename_from_path(path),100);
-//	}
-
-//	return filesys_create_folder(&thread_current()->cwd,path,100);
 	bool ret=filesys_create_folder(path);
-//	printf("mkdir is returning %d\n",ret);
 	return ret;
 }
 
 bool sys_readdir(int fd, char* name)
 {
-//	printf("readdir %s\n",name);
   if(fd >= 0 && fd < FDTABLESIZE) // is valid FD?
   {
 	struct thread *t = thread_current ();
 	struct file* fi = t->fd_table[fd];
 	if(fi)
 	{
-//	  if(!fi->inode->isDir)
-//		  return false;
-//	  lock_acquire(&filesys_lock);
 
 	  struct dir* dir=dir_open(fi->inode);
 	  dir->pos=fi->pos;
@@ -299,17 +261,14 @@ bool sys_readdir(int fd, char* name)
 
 	  fi->pos=dir->pos;
 	  free(dir);
-
-//	  lock_release(&filesys_lock);
-
 	  return ret;
 	}
   }
+  return false;
 }
 
 bool sys_chdir(char* path)
 {
-//	printf("chdir, %s\n",path);
 	struct inode* node=inode_by_path(path,false);
 	if(node==0)
 		return false;
@@ -348,7 +307,6 @@ int sys_exec(char* filename)
 
 int sys_open(char* file_name)
 {
-//	printf("now opening file %s\n",file_name);
   if(!*file_name)  // empty string check
     return -1;
   struct thread *t = thread_current ();
@@ -357,11 +315,9 @@ int sys_open(char* file_name)
   {
     if(!t->fd_table[i])
     {
-//      lock_acquire(&filesys_lock);
       struct file* fi = filesys_open(file_name);
       if(fi)
         t->fd_table[i] = fi;
-//      lock_release(&filesys_lock);
       if(fi)
         return i;
       else
@@ -376,13 +332,7 @@ int sys_create(char* file_name, int size)
   int ret;
   if(!*file_name)  // empty string check
     return 0;
-//  lock_acquire(&filesys_lock);
-//  printf("going to create %s\n",file_name);
   ret = filesys_create(file_name, size);
-//  printf("file_Created\n\n");
-//  lock_release(&filesys_lock);
-
-//  printf("file_Created\n\n");
   return ret;
 }
 
@@ -391,24 +341,19 @@ int sys_remove(char* file_name)
   int ret;
   if(!*file_name)  // empty string check
     return 0;
-//  lock_acquire(&filesys_lock);
   ret = filesys_remove(file_name);
-//  lock_release(&filesys_lock);
   return ret;
 }
 
 void sys_close(int fd)
 {
-//	printf("sys closing\n");
   if(fd >= 0 && fd < FDTABLESIZE) // is valid FD?
   {
     struct thread *t = thread_current ();
     struct file* fi = t->fd_table[fd];
     if(fi)
     {
-//      lock_acquire(&filesys_lock);
       file_close(fi);
-//      lock_release(&filesys_lock);
       t->fd_table[fd] = 0;
     }
   }
@@ -416,7 +361,6 @@ void sys_close(int fd)
 
 int sys_write(int fd, void *buffer, unsigned size)
 {
-//	printf("now writing to file\n");
   if(fd == STDIN_FILENO)
     return 0;
   else if(fd == STDOUT_FILENO)
@@ -433,9 +377,7 @@ int sys_write(int fd, void *buffer, unsigned size)
       if(fi->inode->data.isDir)
        	return -1;
       int ret;
-//      lock_acquire(&filesys_lock);
       ret = file_write(fi, buffer, size);
-//      lock_release(&filesys_lock);
       return ret;
     }
   }
@@ -444,7 +386,6 @@ int sys_write(int fd, void *buffer, unsigned size)
 
 int sys_read(int fd, void* buffer, unsigned size)
 {
-//  printf("In sys_read\n");
   if(fd == STDOUT_FILENO)
     return 0;
   else if(fd == STDIN_FILENO)
@@ -462,9 +403,7 @@ int sys_read(int fd, void* buffer, unsigned size)
     if(fi)
     {
       int ret;
-//      lock_acquire(&filesys_lock);
       ret = file_read(fi, buffer, size);
-//      lock_release(&filesys_lock);
       return ret;
     }
   }
@@ -480,9 +419,7 @@ int sys_filesize(int fd)
     if(fi)
     {
       int ret;
-//      lock_acquire(&filesys_lock);
       ret = file_length(fi);
-//      lock_release(&filesys_lock);
       return ret;
     }
   }
@@ -497,9 +434,7 @@ void sys_seek(int fd, unsigned pos)
     struct file* fi = t->fd_table[fd];
     if(fi)
     {
-//      lock_acquire(&filesys_lock);
       file_seek(fi, pos);
-//      lock_release(&filesys_lock);
     }
   }
 }
@@ -513,9 +448,7 @@ unsigned sys_tell(int fd)
     if(fi)
     {
       unsigned ret;
-//      lock_acquire(&filesys_lock);
       ret = file_tell(fi);
-//      lock_release(&filesys_lock);
       return ret;
     }
   }
@@ -677,7 +610,7 @@ static bool put_valid_val(int *uaddr,int byte)
 {
   if(!is_user_vaddr((void *)uaddr) || uaddr==NULL  )
   {
-	  DPRINTF_SYS("get_valid_val:TERMINATE PROCESS\n");
+	  DPRINTF_SYS("put_valid_val:TERMINATE PROCESS\n");
 	  thread_current()->exit_status=-1;
 	  process_terminate();
   }

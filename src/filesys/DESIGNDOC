@@ -8,9 +8,8 @@
 
 >> Fill in the names and email addresses of your group members.
 
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
-FirstName LastName <email@domain.example>
+Shantanu Chaudhary 
+Harshal Bidasaria
 
 ---- PRELIMINARIES ----
 
@@ -154,6 +153,9 @@ which sleeps the thread for 20 seconds and then it calls flush_cache
 which writes the entries marked dirty to the disk. 
 
 >> C4: Describe your implementation of read-ahead.
+We spawn a thread which checks a list of sectors to be inserted into the cache
+If it finds the list non-empty, it reads the sectors into the cache else it sleeps
+The corresponding wakeup is done when the sectors are added to the list of read_ahead_sectors
 
 ---- SYNCHRONIZATION ----
 

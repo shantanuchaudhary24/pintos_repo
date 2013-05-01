@@ -27,7 +27,6 @@ filesys_init (bool format)
 
   if (format) 
   {
-//	  printf("FORMATTING\n");
 	  do_format ();
   }
 
@@ -39,9 +38,7 @@ filesys_init (bool format)
 void
 filesys_done (void) 
 {
-  
-//	printf("flushing cache om power off.\n");
-	flush_cache();
+  	flush_cache();
 	free_map_close ();
 }
 
@@ -57,8 +54,6 @@ char* filename_from_path(char* path)
                }
        }
 
-//		printf("filename from path %s is %s\n",path,path+mark);
-
        return path+mark;
 }
 
@@ -71,56 +66,33 @@ bool
 filesys_create (const char *name, off_t initial_size) 
 {
   block_sector_t inode_sector = 0;
-//  struct dir *dir = dir_open_root ();
-
-//  printf("was here\n");
   if(strlen(filename_from_path(name))==0||strlen(filename_from_path(name))>14)
 	  return false;
-//  printf("was here\n");
-
   struct inode* inode=inode_by_path(name,true);
   if(inode==NULL)
 	  return false;
   struct dir* dir=dir_open(inode);
-//  printf("filesys_create: path: %s, inode: %x, dir: %x, inode-sector %d\n",name,inode,dir,inode->data.start);
   ASSERT(dir);
-//  printf("inodeaddr %x\n",dir->inode);
 
   bool success = (dir != NULL
                   && free_map_allocate (1, &inode_sector)
                   && inode_create (inode_sector, initial_size, false)
                   && dir_add (dir, filename_from_path(name), inode_sector));
-//  printf("was here\n");
 
   struct inode* in;
-//  ASSERT(success);
-//  printf("added file %s to inode %x at sector %d\n",filename_from_path(name),dir->inode,inode_sector);
-//  ASSERT(dir_lookup(dir,filename_from_path(name),&in));
 
   if (!success && inode_sector != 0) 
   {
-//	  printf("was here\n");
 	  free_map_release (inode_sector, 1);
   }
-//  printf("got here\n");
-
-  //big problem beloWWWWWWW
   dir_close (dir);
-//  free(dir);
-//  printf("got here11\n");
-
   return success;
 }
 
 bool filesys_create_folder (const char* name)
 {
-//  printf("length of %s is %d\n",name,strlen(name));
-
   if(strlen(filename_from_path(name))==0||strlen(filename_from_path(name))>14)
-  {
-//	  printf("returniing false\n");
 	  return false;
-  }
 
   struct inode* inode=inode_by_path(name,true);
   if(inode==NULL)
@@ -141,7 +113,6 @@ bool filesys_create_folder (const char* name)
 	  ASSERT(dir_new);
 	  dir_add(dir_new,"..",inode->sector);
 	  dir_close(dir_new);
-//	  free(dir_new);
   }
   dir_close(dir);
   return success;
@@ -155,18 +126,7 @@ bool filesys_create_folder (const char* name)
 struct file *
 filesys_open (const char *name)
 {
-//  struct dir *dir = dir_open_root ();
-
-//	printf("filesys_open, root inode is %x\n",dir->inode);
   struct inode* inode=inode_by_path(name,false);//true
-//  struct dir* dir=dir_open(inode);
-//  struct inode *inode = NULL;
-//
-//  if (dir != NULL)
-//    dir_lookup (dir, name, &inode);
-//  dir_close (dir);
-
-//  printf("filesys_open found %x\n",inode);
   return file_open (inode);
 }
 
@@ -177,10 +137,7 @@ filesys_open (const char *name)
 bool
 filesys_remove (const char *name) 
 {
-//  struct dir *dir = dir_open_root ();
   bool success = dir_remove (name);
-//  dir_close (dir);
-//  printf("remove status:%d\n",success);
   return success;
 }
 
@@ -190,9 +147,7 @@ do_format (void)
 {
   printf ("Formatting file system...");
   free_map_create ();
-//  printf("this part done\n");
   if (!dir_create (ROOT_DIR_SECTOR))
     PANIC ("root directory creation failed");
   free_map_close ();
-//  printf ("done.\n");
 }

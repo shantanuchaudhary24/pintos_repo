@@ -61,10 +61,8 @@ file_get_inode (struct file *file)
 off_t
 file_read (struct file *file, void *buffer, off_t size) 
 {
-  //printf("in file_read\n");
   off_t bytes_read = inode_read_at (file->inode, buffer, size, file->pos);
   file->pos += bytes_read;
-  //printf("bytes_read:%d\n",file->pos);
   return bytes_read;
 }
 

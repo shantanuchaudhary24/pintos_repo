@@ -37,11 +37,7 @@ free_map_allocate (size_t cnt, block_sector_t *sectorp)
     }
   if (sector != BITMAP_ERROR)
     *sectorp = sector;
-  //printf("giving away sector %d\n",sector);
-//  if(sector == BITMAP_ERROR)
-//  {
-//	  printf("free map alloc error\n");
-//  }
+
   return sector != BITMAP_ERROR;
 }
 

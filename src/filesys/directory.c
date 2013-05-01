@@ -55,8 +55,7 @@ dir_reopen (struct dir *dir)
 void
 dir_close (struct dir *dir) 
 {
-	//printf("Closing directory.\n");
-  if (dir != NULL)
+	if (dir != NULL)
     {
       inode_close (dir->inode);
       free (dir);
@@ -85,42 +84,21 @@ lookup (const struct dir *dir, const char *name,
   ASSERT (dir != NULL);
   ASSERT (name != NULL);
 
-//  printf("now reading through various dir entries\n");
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e)
   {
-//	printf("doing this shit\n");
     if (e.in_use && !strcmp (name, e.name)) 
       {
         if (ep != NULL)
           *ep = e;
         if (ofsp != NULL)
           *ofsp = ofs;
-       // printf("returning: found directory\n");
         return true;
       }
   }
-//  printf("returning\n");
   return false;
 }
 
-//static bool readdir_entry (const struct inode *inode, const char *name)
-//{
-//  struct dir_entry e;
-//  size_t ofs=inode->;
-//
-//  ASSERT (inode != NULL);
-//  ASSERT (name != NULL);
-//
-////  printf("now reading through various dir entries\n");
-//  if(inode_read_at (inode, &e, sizeof e, ofs) == sizeof e)
-//      if (e.in_use)
-//      {
-//    	  strlcpy(name,e.name,15);
-//    	  return true;
-//      }
-//  return false;
-//}
 
 /* Searches DIR for a file with the given NAME
    and returns true if one exists, false otherwise.
@@ -130,7 +108,6 @@ bool
 dir_lookup (const struct dir *dir, const char *name,
             struct inode **inode) 
 {
-//	printf("now dir lookup\n");
   struct dir_entry e;
 
   ASSERT (dir != NULL);
@@ -145,12 +122,10 @@ dir_lookup (const struct dir *dir, const char *name,
 }
 
 struct dir_entry
-dir_lookup_by_inode (const struct inode *inode, const char *name)//, struct dir_entry *ep, off_t *ofsp)
+dir_lookup_by_inode (const struct inode *inode, const char *name)
 {
   struct dir_entry e;
   size_t ofs;
-
-//  printf("dir_lookup %s\n",name);
 
   ASSERT (inode != NULL);
   ASSERT (name != NULL);
@@ -158,28 +133,11 @@ dir_lookup_by_inode (const struct inode *inode, const char *name)//, struct dir_
   for (ofs = 0; inode_read_at (inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e)
   {
-//	printf("read size: %d, sector %d\n",inode_read_at (inode, &e, sizeof e, 0),inode->data.start);
-//    printf("Dir entry: %d, %s\n",e.in_use,e.name);
-
     if (e.in_use && !strcmp (name, e.name))
-      {
-//        if (ep != NULL)
-//          *ep = e;
-//        if (ofsp != NULL)
-//          *ofsp = ofs;
-        return e;//true;
-      }
+        return e;//true
   }
-//  for (ofs = 0; inode_read_at (inode, &e, sizeof e, ofs) == sizeof e;
-//       ofs += sizeof e)
-//  {
-//	  printf("Dir entry: %d, %s\n",e.in_use,e.name);
-//  }
-//  printf("read size: %d, sector %d\n",inode_read_at (inode, &e, sizeof e, 0),inode->data.start);
-
-//  printf("sending back a devil while looking for %s\n",name);
   e.inode_sector=666666;
-  return e;//false;
+  return e;//false
 }
 
 /* Adds a file named NAME to DIR, which must not already contain a
@@ -191,7 +149,6 @@ dir_lookup_by_inode (const struct inode *inode, const char *name)//, struct dir_
 bool
 dir_add (struct dir *dir, const char *name, block_sector_t inode_sector)
 {
-//	printf("entered dir add\n");
   struct dir_entry e;
   off_t ofs;
 bool success = false;
@@ -206,11 +163,8 @@ bool success = false;
   /* Check that NAME is not in use. */
   if (lookup (dir, name, NULL, NULL))
   {
-//	  printf("file exists\n");
 	  goto done;
   }
-//  else
-//	  printf("lookup done, file doesnt exist yet\n");
   /* Set OFS to offset of free slot.
      If there are no free slots, then it will be set to the
      current end-of-file.
@@ -221,40 +175,24 @@ bool success = false;
   for (ofs = 0; inode_read_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
        ofs += sizeof e) 
   {
-//	  printf("name of directory entry is %s\n",e.name);
 	  if (!e.in_use)
-    {
-//    	printf("normal break\n");
     	break;
-    }
   }
-  if(ofs==0)
-  {
-//	  printf("offset is zero\n");
-	  memset(&e,0,sizeof(e));
-  }
+  if(ofs==0) memset(&e,0,sizeof(e));
 
   /* Write slot. */
   e.in_use = true;
   strlcpy (e.name, name, sizeof e.name);
   e.inode_sector = inode_sector;
-//  printf("inode write %x, ofd %d\n",dir->inode,ofs);
-//  printf("inode write hee\n");
   success = inode_write_at (dir->inode, &e, sizeof e, ofs) == sizeof e;
   if(success)
   {
-//	  if(dir->inode->data.length<ofs+sizeof e)
 	  {
 		  dir->inode->data.length=ofs+sizeof e;
-//		  printf("new size %d after making %s in %x\n",ofs+sizeof e,name,dir->inode);
-//		  block_write(fs_device,dir->inode->sector,&dir->inode->data);
 	  }
   }
-//	printf("exiting dir add %d\n",success);
 
  done:
-// if(!success)
-//	 printf("dir add failed, %d\n",ofs);
   return success;
 }
 
@@ -283,37 +221,24 @@ dir_remove (const char *name)
   if (inode == NULL)
     goto done;
 
-//  block_read(fs_device,inode->sector,&inode->data);
-
   if(inode->data.isDir&&(inode->data.length!=sizeof(struct dir_entry)))
-  {
-//	  printf("not deleting %d\n",inode->data.length);
 	  goto done;
-  }
 
   if(inode->sector==thread_current()->cwd.inode->sector)
-  {
 	  thread_current()->cwd.inode=NULL;
-  }
+
 
   /* Erase directory entry. */
   e.in_use = false;
-//  printf("and here\n");
   if (inode_write_at (dir->inode, &e, sizeof e, ofs) != sizeof e) 
     goto done;
 
   /* Remove inode. */
   inode_remove (inode);
   success = true;
-//  block_read(fs_device,dir->inode->sector,&dir->inode->data);
-//  printf("size was %d, %x\n",dir->inode->data.length,dir->inode);
   dir->inode->data.length-=sizeof e;
-//  if(dir->inode->data.length==60)
-//	  printf("yo\n");
-//  block_write(fs_device,dir->inode->sector,&dir->inode->data);
-//  printf("size was %d, %x\n",dir->inode->data.length,dir->inode);
 
- done:
+  done:
   inode_close (inode);
   dir_close(dir);
   return success;

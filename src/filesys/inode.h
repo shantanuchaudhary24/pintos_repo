@@ -29,7 +29,6 @@ struct inode
     bool removed;                       /* True if deleted, false otherwise. */
     int deny_write_cnt;                 /* 0: writes ok, >0: deny writes. */
     struct inode_disk data;             /* Inode content. */
-//    bool isDir;
   };
 
 
@@ -45,5 +44,7 @@ off_t inode_write_at (struct inode *, const void *, off_t size, off_t offset);
 void inode_deny_write (struct inode *);
 void inode_allow_write (struct inode *);
 off_t inode_length (const struct inode *);
+struct inode* inode_by_path(char* path, bool parent);
+
 
 #endif /* filesys/inode.h */
