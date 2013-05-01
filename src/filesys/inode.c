@@ -50,7 +50,9 @@ byte_to_sector (const struct inode_disk *inode, off_t pos, bool create)
   if(inode->start==2)
   {
     if (pos < inode->length)
-      return inode->start + pos / BLOCK_SECTOR_SIZE;
+    {
+    	return inode->start + pos / BLOCK_SECTOR_SIZE;
+    }
     else
       return -1;
   }
@@ -169,6 +171,37 @@ struct inode* inode_by_path(char* path, bool parent)
   return ip;
 }
 
+bool inode_freemap_create (block_sector_t sector, off_t length)
+{
+	  struct inode_disk *disk_inode = NULL;
+	  bool success = false;
+
+	  /* If this assertion fails, the inode structure is not exactly
+	     one sector in size, and you should fix that. */
+	  ASSERT (sizeof *disk_inode == BLOCK_SECTOR_SIZE);
+
+	  disk_inode = calloc (1, sizeof *disk_inode);
+	  if (disk_inode != NULL)
+	    {
+	      size_t sectors = bytes_to_sectors (length);
+	      disk_inode->length = length;
+	      disk_inode->magic = INODE_MAGIC;
+	      disk_inode->isDir = false;
+
+	      if (free_map_allocate (sectors, &disk_inode->start))
+	        {
+				write_cache(sector,disk_inode);
+//	            {
+//	              static char zero[BLOCK_SECTOR_SIZE];
+//	              memset(zero,0,BLOCK_SECTOR_SIZE);
+//              	  write_cache(disk_inode->start, zero);
+//	            }
+	          success = true;
+	        }
+	      free (disk_inode);
+	    }
+	  return success;
+}
 
 /* Initializes an inode with LENGTH bytes of data and
    writes the new inode to sector SECTOR on the file system
@@ -398,7 +431,7 @@ inode_write_at (struct inode *inode, const void *buffer_, off_t size,
       bytes_written += chunk_size;
     }
 
-  if(!inode->data.isDir&&inode->data.length<offset+bytes_written)
+  if(!inode->data.isDir&&inode->data.length<offset)
   {
 	  inode->data.length=offset;
 	  write_cache(inode->sector,&inode->data);
