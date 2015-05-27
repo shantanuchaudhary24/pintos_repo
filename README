@@ -1,0 +1,38 @@
+################################################################################################
+
+					     README
+
+################################################################################################
+
+This repository contains code for PINTOS kernel. Various modules of the kernel such as userprog
+system calls, filesystem calls, virtual memory management (swap and nmap) etc. have been 
+implemented.
+
+################################################################################################
+
+Collaborators:
+Shantanu Chaudhary (shantanuchaudhary24@gmail.com)
+Ankur Garg (cs5100208@cse.iitd.ac.in)
+Harshal Bidasaria (cs5100283@cse.iitd.ac.in)
+
+################################################################################################
+
+Folder hierarchy:
+README		: Information about project code
+src		: source code files for pintos
+palasi.sh	: submission script
+
+################################################################################################
+
+Dependencies:
+-> C compiler
+
+################################################################################################
+
+Setting up project code:
+-> Clone the repository
+
+Building the OS Kernel:
+Use "make" in individual directories to build kernel components
+
+################################################################################################
